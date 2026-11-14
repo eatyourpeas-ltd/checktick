@@ -35,11 +35,16 @@ from checktick_app.surveys.models import (
     Survey,
     SurveyMembership,
     SurveyQuestion,
+    SurveyResponse,
 )
 from checktick_app.surveys.permissions import is_org_admin
 from checktick_app.surveys.views import get_survey_key_from_session
 
-from .models import AppraisalRelationship, AppraisalReportSnapshot
+from .models import (
+    AppraisalExceptionReview,
+    AppraisalRelationship,
+    AppraisalReportSnapshot,
+)
 from .reporting import build_report_document
 
 
@@ -661,3 +666,231 @@ def report_release(request: HttpRequest, pk: int) -> HttpResponse:
     )
     messages.success(request, f"Report v{snapshot.version} released to the appraisee.")
     return redirect("appraisal:report_view", pk=rel.pk)
+
+
+def _is_ro(user, org: Organization) -> bool:
+    """Responsible Officer: organisation owner or admin."""
+    return org.owner_id == user.id or is_org_admin(user, org)
+
+
+@login_required
+@require_http_methods(["GET"])
+def exception_reviews(request: HttpRequest, pk: int) -> HttpResponse:
+    """Exception review list for an appraisal (§9).
+
+    Appraiser and RO only — never the appraisee, whose lack of results
+    access is the control (nothing to hide behind a flag).
+    """
+    rel = get_object_or_404(
+        AppraisalRelationship.objects.select_related(
+            "survey", "organization", "appraisee", "appraiser"
+        ),
+        pk=pk,
+    )
+    is_appraiser = rel.appraiser_id == request.user.id
+    if not (is_appraiser or _is_ro(request.user, rel.organization)):
+        raise PermissionDenied(
+            "Only the appraiser and the Responsible Officer can view "
+            "exception reviews."
+        )
+    reviews = rel.exception_reviews.select_related(
+        "response", "raised_by", "decided_by"
+    ).order_by("-created_at")
+    # Count-only response metadata for the raise form — no answer content
+    # is ever listed here (§3.1).
+    responses = rel.survey.responses.order_by("-submitted_at").only(
+        "id", "submitted_at", "access_token"
+    )
+    return render(
+        request,
+        "appraisal/exceptions.html",
+        {
+            "rel": rel,
+            "reviews": reviews,
+            "responses": responses,
+            "is_appraiser": is_appraiser,
+            "is_ro": _is_ro(request.user, rel.organization),
+        },
+    )
+
+
+@login_required
+@require_http_methods(["POST"])
+def exception_review_raise(request: HttpRequest, pk: int) -> HttpResponse:
+    """Appraiser raises an exception review for one response (§9)."""
+    rel = get_object_or_404(
+        AppraisalRelationship.objects.select_related("survey", "organization"),
+        pk=pk,
+    )
+    if rel.appraiser_id != request.user.id:
+        raise PermissionDenied("Only the appraiser can raise an exception review.")
+    response = get_object_or_404(
+        SurveyResponse, survey=rel.survey, pk=request.POST.get("response")
+    )
+    reason = (request.POST.get("reason") or "").strip()
+    if not reason:
+        messages.error(request, "A reason is required to raise an exception review.")
+        return redirect("appraisal:exception_reviews", pk=rel.pk)
+    review = AppraisalExceptionReview.objects.create(
+        relationship=rel,
+        response=response,
+        raised_by=request.user,
+        reason=reason,
+    )
+    AuditLog.objects.create(
+        actor=request.user,
+        scope=AuditLog.Scope.SURVEY,
+        organization=rel.organization,
+        survey=rel.survey,
+        action=AuditLog.Action.CREATE,
+        severity=AuditLog.Severity.WARNING,
+        message="Exception review raised (rater linkage requested).",
+        metadata={
+            "exception_review_id": review.pk,
+            "response_id": response.pk,
+            # Never the reason text or any response content — the reason
+            # may quote the response (house logging rules).
+        },
+    )
+    messages.success(request, "Exception review raised — awaiting RO co-signature.")
+    return redirect("appraisal:exception_reviews", pk=rel.pk)
+
+
+@login_required
+@require_http_methods(["POST"])
+def exception_review_decide(
+    request: HttpRequest, pk: int, review_id: int
+) -> HttpResponse:
+    """RO co-signature (D10): approve or reject a raised exception review.
+
+    The approver must be an org owner/admin and must not be the raiser —
+    two-party control protects the appraiser as well as the process.
+    """
+    rel = get_object_or_404(
+        AppraisalRelationship.objects.select_related("survey", "organization"),
+        pk=pk,
+    )
+    review = get_object_or_404(AppraisalExceptionReview, relationship=rel, pk=review_id)
+    if not _is_ro(request.user, rel.organization):
+        raise PermissionDenied(
+            "Only the Responsible Officer can co-sign an exception review."
+        )
+    if review.raised_by_id == request.user.id:
+        raise PermissionDenied(
+            "Two-party control: the raiser cannot co-sign their own request."
+        )
+    if review.status != AppraisalExceptionReview.Status.REQUESTED:
+        messages.error(request, "This exception review has already been decided.")
+        return redirect("appraisal:exception_reviews", pk=rel.pk)
+
+    decision = request.POST.get("decision")
+    note = (request.POST.get("decision_note") or "").strip()
+    if decision == "approve":
+        review.status = AppraisalExceptionReview.Status.APPROVED
+        review.decided_by = request.user
+        review.decided_at = timezone.now()
+        review.decision_note = note
+        review.save(
+            update_fields=["status", "decided_by", "decided_at", "decision_note"]
+        )
+        AuditLog.objects.create(
+            actor=request.user,
+            scope=AuditLog.Scope.SURVEY,
+            organization=rel.organization,
+            survey=rel.survey,
+            action=AuditLog.Action.UPDATE,
+            severity=AuditLog.Severity.WARNING,
+            message="Exception review approved — rater linkage disclosed.",
+            metadata={"exception_review_id": review.pk},
+        )
+        messages.success(
+            request,
+            "Exception review approved. The rater linkage is now visible "
+            "to the appraiser and the RO.",
+        )
+    elif decision == "reject":
+        review.status = AppraisalExceptionReview.Status.REJECTED
+        review.decided_by = request.user
+        review.decided_at = timezone.now()
+        review.decision_note = note
+        review.save(
+            update_fields=["status", "decided_by", "decided_at", "decision_note"]
+        )
+        AuditLog.objects.create(
+            actor=request.user,
+            scope=AuditLog.Scope.SURVEY,
+            organization=rel.organization,
+            survey=rel.survey,
+            action=AuditLog.Action.UPDATE,
+            severity=AuditLog.Severity.INFO,
+            message="Exception review rejected.",
+            metadata={"exception_review_id": review.pk},
+        )
+        messages.info(request, "Exception review rejected.")
+    else:
+        messages.error(request, "Unknown decision.")
+    return redirect("appraisal:exception_reviews", pk=rel.pk)
+
+
+@login_required
+@require_http_methods(["GET"])
+def exception_review_linkage(
+    request: HttpRequest, pk: int, review_id: int
+) -> HttpResponse:
+    """The disclosed rater linkage for an APPROVED exception review (§9).
+
+    Visible to the appraiser and the RO only, and only once the RO has
+    co-signed. Shows the pseudonymous linkage the data model already
+    holds: the token, its category values (subject, rater role), and the
+    response's submission metadata — no crypto change, permission and
+    audit only.
+    """
+    rel = get_object_or_404(
+        AppraisalRelationship.objects.select_related(
+            "survey", "organization", "appraiser", "appraisee"
+        ),
+        pk=pk,
+    )
+    review = get_object_or_404(
+        AppraisalExceptionReview.objects.select_related(
+            "response__access_token", "raised_by", "decided_by"
+        ),
+        relationship=rel,
+        pk=review_id,
+    )
+    is_appraiser = rel.appraiser_id == request.user.id
+    is_ro = _is_ro(request.user, rel.organization)
+    if not (is_appraiser or is_ro):
+        raise PermissionDenied(
+            "Only the appraiser and the Responsible Officer can view the "
+            "disclosed linkage."
+        )
+    if review.status != AppraisalExceptionReview.Status.APPROVED:
+        messages.error(
+            request,
+            "The rater linkage is only visible once the Responsible "
+            "Officer has co-signed the exception review.",
+        )
+        return redirect("appraisal:exception_reviews", pk=rel.pk)
+
+    response = review.response
+    token = response.access_token
+    linkage = {
+        "response_id": response.pk,
+        "submitted_at": response.submitted_at,
+        "token": token.token if token else None,
+        "category_values": (token.category_values if token else {}) or {},
+        "token_note": token.note if token else "",
+        "token_created_at": token.created_at if token else None,
+        "token_used_at": token.used_at if token else None,
+        "authenticated_user": (
+            response.submitted_by.get_full_name() or response.submitted_by.username
+            if response.submitted_by
+            else None
+        ),
+    }
+    return render(
+        request,
+        "appraisal/exception_linkage.html",
+        {"rel": rel, "review": review, "linkage": linkage},
+    )

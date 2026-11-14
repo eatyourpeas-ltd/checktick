@@ -28,6 +28,8 @@ from checktick_app.surveys.services.response_analytics import (
     compute_survey_summary,
 )
 
+from .models import AppraisalExceptionReview
+
 # The rater-role dimension name used by the appraisal instrument
 # families (docs/question-group-templates/).
 RATER_ROLE_DIM = "rater_role"
@@ -179,5 +181,10 @@ def build_report_document(rel, survey_key: bytes | None) -> dict[str, Any]:
         "structure": _structure_inventory(survey),
         "populations": populations,
         "sections": sections,
-        "exception_review_count": 0,  # Phase 5 wires this up
+        # §9: the released report records only that an exception review
+        # occurred (existence) — never its content, which stays with the
+        # appraiser/RO.
+        "exception_review_count": rel.exception_reviews.filter(
+            status=AppraisalExceptionReview.Status.APPROVED
+        ).count(),
     }

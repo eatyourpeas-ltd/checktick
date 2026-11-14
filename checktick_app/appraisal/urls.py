@@ -20,4 +20,24 @@ urlpatterns = [
         views.report_release,
         name="report_release",
     ),
+    path(
+        "relationships/<int:pk>/exceptions/",
+        views.exception_reviews,
+        name="exception_reviews",
+    ),
+    path(
+        "relationships/<int:pk>/exceptions/raise/",
+        views.exception_review_raise,
+        name="exception_review_raise",
+    ),
+    path(
+        "relationships/<int:pk>/exceptions/<int:review_id>/decide/",
+        views.exception_review_decide,
+        name="exception_review_decide",
+    ),
+    path(
+        "relationships/<int:pk>/exceptions/<int:review_id>/linkage/",
+        views.exception_review_linkage,
+        name="exception_review_linkage",
+    ),
 ]

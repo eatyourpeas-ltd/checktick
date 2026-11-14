@@ -130,3 +130,59 @@ class AppraisalReportSnapshot(models.Model):
 
     def __str__(self) -> str:
         return f"Report v{self.version} for {self.relationship}"
+
+
+class AppraisalExceptionReview(models.Model):
+    """Two-party disclosure of a colleague rater's identity (§9, D10).
+
+    Normally the reporting layer never shows the token→response
+    linkage. When a response indicates a serious risk (patient safety,
+    fitness to practise), the appraiser raises an exception review and
+    the Responsible Officer co-signs before the linkage is revealed —
+    protecting the appraiser as well as the process. Fully audited; the
+    released report records only that an exception review occurred.
+    """
+
+    class Status(models.TextChoices):
+        REQUESTED = "requested", "Requested"
+        APPROVED = "approved", "Approved"
+        REJECTED = "rejected", "Rejected"
+
+    relationship = models.ForeignKey(
+        AppraisalRelationship,
+        on_delete=models.CASCADE,
+        related_name="exception_reviews",
+    )
+    response = models.ForeignKey(
+        "surveys.SurveyResponse",
+        on_delete=models.CASCADE,
+        related_name="exception_reviews",
+        help_text="The response whose rater linkage is under review",
+    )
+    raised_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="exception_reviews_raised",
+    )
+    reason = models.TextField(
+        help_text="Why the rater linkage is needed (recorded on the audit trail)"
+    )
+    status = models.CharField(
+        max_length=10, choices=Status.choices, default=Status.REQUESTED
+    )
+    decided_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        null=True,
+        blank=True,
+        related_name="exception_reviews_decided",
+    )
+    decided_at = models.DateTimeField(null=True, blank=True)
+    decision_note = models.TextField(blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        ordering = ["-created_at"]
+
+    def __str__(self) -> str:
+        return f"Exception review ({self.status}) for {self.relationship}"

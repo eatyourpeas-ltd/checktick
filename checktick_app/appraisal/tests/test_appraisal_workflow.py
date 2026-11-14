@@ -643,3 +643,187 @@ def test_release_requires_unlock_when_encrypted(
     resp = client.post(reverse("appraisal:report_release", kwargs={"pk": rel.pk}))
     assert resp.status_code == 302
     assert rel.snapshots.count() == 1
+
+
+# ---------------------------------------------------------------------------
+# Phase 5 — exception review: two-party disclosure (§9, D10)
+# ---------------------------------------------------------------------------
+
+
+def _raise_review(client, rel, response, reason="Serious risk identified."):
+    return client.post(
+        reverse("appraisal:exception_review_raise", kwargs={"pk": rel.pk}),
+        {"response": response.pk, "reason": reason},
+    )
+
+
+@pytest.mark.django_db
+def test_appraiser_raises_ro_cosigns_linkage_revealed(
+    client, org, memberships, ro, appraiser, appraisee, instrument
+):
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    response = _clinician_response(rel.survey, appraiser)
+
+    # Appraiser raises.
+    client.force_login(appraiser)
+    resp = _raise_review(client, rel, response)
+    assert resp.status_code == 302
+    review = rel.exception_reviews.get()
+    assert review.status == "requested"
+    assert review.raised_by == appraiser
+    assert AuditLog.objects.filter(
+        survey=rel.survey, message__contains="Exception review raised"
+    ).exists()
+
+    # The linkage is NOT visible before co-signature.
+    resp = client.get(
+        reverse(
+            "appraisal:exception_review_linkage",
+            kwargs={"pk": rel.pk, "review_id": review.pk},
+        )
+    )
+    assert resp.status_code == 302  # redirected with an error
+
+    # The RO (org owner) co-signs — a different party to the raiser.
+    client.force_login(ro)
+    resp = client.post(
+        reverse(
+            "appraisal:exception_review_decide",
+            kwargs={"pk": rel.pk, "review_id": review.pk},
+        ),
+        {"decision": "approve", "decision_note": "Agreed — patient safety."},
+    )
+    assert resp.status_code == 302
+    review.refresh_from_db()
+    assert review.status == "approved"
+    assert review.decided_by == ro
+    assert AuditLog.objects.filter(
+        survey=rel.survey, message__contains="linkage disclosed"
+    ).exists()
+
+    # The disclosed linkage is now viewable and shows the token.
+    client.force_login(appraiser)
+    resp = client.get(
+        reverse(
+            "appraisal:exception_review_linkage",
+            kwargs={"pk": rel.pk, "review_id": review.pk},
+        )
+    )
+    assert resp.status_code == 200
+    html = resp.content.decode()
+    assert response.access_token.token in html
+    assert "clinician" in html
+
+
+@pytest.mark.django_db
+def test_appraiser_cannot_cosign_own_request(
+    client, org, memberships, appraiser, appraisee, instrument
+):
+    """Two-party control: the raiser cannot co-sign, even when they are
+    an org admin themselves."""
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    # Make the appraiser an org admin too — the two-party control must
+    # still block self-approval.
+    OrganizationMembership.objects.filter(organization=org, user=appraiser).update(
+        role=OrganizationMembership.Role.ADMIN
+    )
+    response = _clinician_response(rel.survey, appraiser)
+    client.force_login(appraiser)
+    _raise_review(client, rel, response)
+    review = rel.exception_reviews.get()
+    resp = client.post(
+        reverse(
+            "appraisal:exception_review_decide",
+            kwargs={"pk": rel.pk, "review_id": review.pk},
+        ),
+        {"decision": "approve"},
+    )
+    assert resp.status_code == 403
+    review.refresh_from_db()
+    assert review.status == "requested"
+
+
+@pytest.mark.django_db
+def test_appraisee_never_sees_exception_reviews(
+    client, org, memberships, ro, appraiser, appraisee, instrument
+):
+    """The appraisee has no results access at all — nothing to hide behind
+    a flag (§9). The exceptions page is denied to them entirely."""
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    response = _clinician_response(rel.survey, appraiser)
+    client.force_login(appraiser)
+    _raise_review(client, rel, response)
+
+    client.force_login(appraisee)
+    resp = client.get(reverse("appraisal:exception_reviews", kwargs={"pk": rel.pk}))
+    assert resp.status_code == 403
+    resp = client.post(
+        reverse("appraisal:exception_review_raise", kwargs={"pk": rel.pk}),
+        {"response": response.pk, "reason": "x"},
+    )
+    assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+def test_rejected_review_hides_linkage(
+    client, org, memberships, ro, appraiser, appraisee, instrument
+):
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    response = _clinician_response(rel.survey, appraiser)
+    client.force_login(appraiser)
+    _raise_review(client, rel, response)
+    review = rel.exception_reviews.get()
+
+    client.force_login(ro)
+    client.post(
+        reverse(
+            "appraisal:exception_review_decide",
+            kwargs={"pk": rel.pk, "review_id": review.pk},
+        ),
+        {"decision": "reject", "decision_note": "Not justified."},
+    )
+    client.force_login(appraiser)
+    resp = client.get(
+        reverse(
+            "appraisal:exception_review_linkage",
+            kwargs={"pk": rel.pk, "review_id": review.pk},
+        )
+    )
+    assert resp.status_code == 302  # linkage stays hidden
+
+
+@pytest.mark.django_db
+def test_report_records_exception_review_existence(
+    client, org, memberships, ro, appraiser, appraisee, instrument
+):
+    """The released report records only that an exception review occurred
+    (§9) — never its content."""
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    rel.min_responses = 1
+    rel.save()
+    _patient_response(rel.survey)
+    response = _clinician_response(rel.survey, appraiser)
+    client.force_login(appraiser)
+    _raise_review(client, rel, response)
+
+    # Before approval: count is 0.
+    client.post(reverse("appraisal:report_release", kwargs={"pk": rel.pk}))
+    doc = rel.snapshots.get(version=1).document
+    assert doc["exception_review_count"] == 0
+
+    # After RO approval: count is 1, content still absent.
+    review = rel.exception_reviews.get()
+    client.force_login(ro)
+    client.post(
+        reverse(
+            "appraisal:exception_review_decide",
+            kwargs={"pk": rel.pk, "review_id": review.pk},
+        ),
+        {"decision": "approve"},
+    )
+    client.force_login(appraiser)
+    client.post(reverse("appraisal:report_release", kwargs={"pk": rel.pk}))
+    doc = rel.snapshots.get(version=2).document
+    assert doc["exception_review_count"] == 1
+    assert "reason" not in doc
+    assert review.reason not in str(doc)
