@@ -144,7 +144,11 @@ def test_export_per_option_followup_dict_shape(survey):
             {
                 "label": "Self-employed",
                 "value": "Self-employed",
-                "followup_text": {"enabled": True, "label": "What type of business?"},
+                "followup_text": {
+                    "enabled": True,
+                    "label": "What type of business?",
+                    "type": "text",
+                },
             },
         ],
         order=0,
@@ -158,6 +162,7 @@ def test_export_per_option_followup_dict_shape(survey):
     assert opts[1]["followup_text"] == {
         "enabled": True,
         "label": "What type of business?",
+        "type": "text",
     }
 
 

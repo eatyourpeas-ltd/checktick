@@ -2993,13 +2993,24 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
             # Check if this option should have a follow-up text input
             followup_key = f"option_{renderable_idx}_followup"
             followup_label_key = f"option_{renderable_idx}_followup_label"
+            followup_type_key = f"option_{renderable_idx}_followup_type"
             renderable_idx += 1
 
             if data.get(followup_key) in {"on", "true", "1", "yes"}:
                 followup_label = (data.get(followup_label_key) or "").strip()
                 if not followup_label:
                     followup_label = f"Please elaborate on '{opt_text}'"
-                opt_dict["followup_text"] = {"enabled": True, "label": followup_label}
+                # Typed follow-ups (GMC 360): the follow-up can be a
+                # free-text box (default) or a Yes/No question shown
+                # when this option is selected.
+                fu_type = (data.get(followup_type_key) or "text").strip()
+                if fu_type not in {"text", "yesno"}:
+                    fu_type = "text"
+                opt_dict["followup_text"] = {
+                    "enabled": True,
+                    "label": followup_label,
+                    "type": fu_type,
+                }
 
             options.append(opt_dict)
 
@@ -3580,7 +3591,8 @@ def _serialize_question_for_builder(
                             option_followup_config[str(idx)] = {
                                 "label": opt["followup_text"].get(
                                     "label", "Please elaborate"
-                                )
+                                ),
+                                "type": opt["followup_text"].get("type", "text"),
                             }
         elif isinstance(options, list):
             for opt in options:
@@ -3609,7 +3621,8 @@ def _serialize_question_for_builder(
                         option_followup_config[str(renderable_idx)] = {
                             "label": opt["followup_text"].get(
                                 "label", "Please elaborate"
-                            )
+                            ),
+                            "type": opt["followup_text"].get("type", "text"),
                         }
                 renderable_idx += 1
 
@@ -15880,16 +15893,23 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
 def _option_followup_label(option: Any) -> str | None:
     """Return the follow-up label for a question option, if configured.
 
-    Options store follow-ups as ``followup_text: {enabled, label}`` (the shape
-    written by both the builder form and the outline importer). Legacy rows
-    used ``has_followup_text`` / ``followup_text_label`` — both shapes are
-    read so existing surveys export their follow-ups to the outline.
+    Options store follow-ups as ``followup_text: {enabled, label, type}``
+    (the shape written by both the builder form and the outline importer;
+    ``type`` is "text" by default or "yesno" for a typed Yes/No
+    follow-up). Legacy rows used ``has_followup_text`` /
+    ``followup_text_label`` — both shapes are read so existing surveys
+    export their follow-ups to the outline.
     """
     if not isinstance(option, dict):
         return None
     fu = option.get("followup_text")
     if isinstance(fu, dict) and fu.get("enabled") and fu.get("label"):
-        return str(fu["label"])
+        label = str(fu["label"])
+        # Typed follow-ups round-trip through the outline: the type
+        # marker is appended so import restores the Yes/No widget.
+        if fu.get("type") == "yesno":
+            label = f"{label} (yesno)"
+        return label
     if option.get("has_followup_text"):
         return str(option.get("followup_text_label") or "Please specify")
     return None

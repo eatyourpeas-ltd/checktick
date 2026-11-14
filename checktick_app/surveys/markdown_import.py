@@ -564,11 +564,25 @@ def parse_bulk_markdown(md_text: str) -> List[Dict[str, Any]]:
                 if opt_text == "__group__":
                     result.append({"type": "option_group", "label": followup_label})
                     continue
+                # Typed follow-ups (GMC 360): a trailing "(yesno)" marker
+                # makes the follow-up a Yes/No question instead of a
+                # free-text box. "(text)" is the default and optional.
+                fu_type = "text"
+                type_match = re.match(
+                    r"^(.*?)\s*\((yesno|text)\)\s*$", followup_label, re.IGNORECASE
+                )
+                if type_match:
+                    followup_label = type_match.group(1).strip()
+                    fu_type = type_match.group(2).lower()
                 result.append(
                     {
                         "label": opt_text,
                         "value": opt_text,
-                        "followup_text": {"enabled": True, "label": followup_label},
+                        "followup_text": {
+                            "enabled": True,
+                            "label": followup_label,
+                            "type": fu_type,
+                        },
                     }
                 )
             else:

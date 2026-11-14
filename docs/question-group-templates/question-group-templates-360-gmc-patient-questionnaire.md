@@ -184,6 +184,7 @@ render: cascading_radios
 ## Your professional role (please tick only one box):* {your-professional-role-(please}
 (mc_single)
 - Doctor
+  + If you are a doctor, are you in a training grade? (yesno)
 - Registered Nurse
 - Health Visitor/Midwife
 - Pharmacist

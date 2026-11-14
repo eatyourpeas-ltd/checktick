@@ -614,7 +614,7 @@
                   {% for item in chunk.options %}
                     {% if item.opt.followup_text and item.opt.followup_text.enabled %}
                       <div class="mt-2 hidden" data-followup-field="q_{{ q.id }}_{{ item.idx }}">
-                        <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_{{ item.idx }}" placeholder="{{ item.opt.followup_text.label|default:'Please elaborate' }}" aria-label="{{ item.opt.followup_text.label|default:'Please elaborate' }}" />
+                        {% include 'surveys/partials/followup_input.html' with q=q suffix=item.idx fu=item.opt.followup_text %}
                       </div>
                     {% endif %}
                   {% endfor %}
@@ -696,7 +696,7 @@
               </label>
               {% if opt.followup_text and opt.followup_text.enabled %}
                 <div class="ml-7 hidden" data-followup-field="q_{{ q.id }}_{{ forloop.counter0 }}">
-                  <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_{{ forloop.counter0 }}" placeholder="{{ opt.followup_text.label|default:'Please elaborate' }}" aria-label="{{ opt.followup_text.label|default:'Please elaborate' }}" />
+                  {% include 'surveys/partials/followup_input.html' with q=q suffix=forloop.counter0 fu=opt.followup_text %}
                 </div>
               {% endif %}
             </div>
@@ -727,7 +727,7 @@
           {% for opt in q.options|as_list %}
             {% if opt.followup_text and opt.followup_text.enabled %}
               <div class="mt-2 hidden" data-followup-field="q_{{ q.id }}_{{ forloop.counter0 }}">
-                <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_{{ forloop.counter0 }}" placeholder="{{ opt.followup_text.label|default:'Please elaborate' }}" />
+                {% include 'surveys/partials/followup_input.html' with q=q suffix=forloop.counter0 fu=opt.followup_text %}
               </div>
             {% endif %}
           {% endfor %}
@@ -758,15 +758,15 @@
               {% for opt in yesno_opts %}
                 {% if opt.value == "yes" and opt.followup_text and opt.followup_text.enabled %}
                   <div class="mt-2 hidden" data-followup-field="q_{{ q.id }}_yes">
-                    <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_yes" placeholder="{{ opt.followup_text.label|default:'Please elaborate' }}" />
+                    {% include 'surveys/partials/followup_input.html' with q=q suffix='yes' fu=opt.followup_text %}
                   </div>
                 {% elif opt.value == "no" and opt.followup_text and opt.followup_text.enabled %}
                   <div class="mt-2 hidden" data-followup-field="q_{{ q.id }}_no">
-                    <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_no" placeholder="{{ opt.followup_text.label|default:'Please elaborate' }}" />
+                    {% include 'surveys/partials/followup_input.html' with q=q suffix='no' fu=opt.followup_text %}
                   </div>
                 {% elif opt.value == "dont_know" and opt.followup_text and opt.followup_text.enabled %}
                   <div class="mt-2 hidden" data-followup-field="q_{{ q.id }}_dont_know">
-                    <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_dont_know" placeholder="{{ opt.followup_text.label|default:'Please elaborate' }}" />
+                    {% include 'surveys/partials/followup_input.html' with q=q suffix='dont_know' fu=opt.followup_text %}
                   </div>
                 {% endif %}
               {% endfor %}
@@ -1329,7 +1329,15 @@
             `[name="q_${qid}_followup_${suffix}"]`
           );
           if (fuInput && fuValue) {
-            fuInput.value = fuValue;
+            if (fuInput.type === "radio") {
+              // Typed yes/no follow-up: check the matching radio.
+              const target = document.querySelector(
+                `[name="q_${qid}_followup_${suffix}"][value="${fuValue}"]`
+              );
+              if (target) target.checked = true;
+            } else {
+              fuInput.value = fuValue;
+            }
             const wrapper = fuInput.closest("[data-followup-field], [data-followup-any]");
             if (wrapper) wrapper.classList.remove("hidden");
           }

@@ -1251,14 +1251,12 @@
           const idx = lines
             .slice(0, lineIdx)
             .filter((l) => !isOptionGroupLine(l)).length;
-          const isEnabled =
-            followupConfig &&
-            followupConfig[idx] &&
-            followupConfig[idx].enabled;
-          const label =
-            followupConfig && followupConfig[idx]
-              ? followupConfig[idx].label
-              : "Please elaborate";
+          const cfg = followupConfig && followupConfig[idx];
+          const isEnabled = cfg && cfg.enabled;
+          const label = cfg ? cfg.label : "Please elaborate";
+          // Typed follow-ups (GMC 360): text box (default) or a Yes/No
+          // question shown when this option is selected.
+          const fuType = cfg && cfg.type === "yesno" ? "yesno" : "text";
 
           return `
           <div class="flex items-start gap-2 p-2 bg-base-100 rounded border border-base-300">
@@ -1268,6 +1266,10 @@
             <div class="flex-1 min-w-0">
               <label for="option-${idx}-followup" class="text-sm font-medium cursor-pointer block truncate" title="${line}">${line}</label>
               <input type="text" name="option_${idx}_followup_label" class="input input-xs input-bordered w-full mt-1" placeholder="Follow-up label..." value="${label}" />
+              <select name="option_${idx}_followup_type" class="select select-xs w-full mt-1" aria-label="Follow-up type">
+                <option value="text" ${fuType === "text" ? "selected" : ""}>Text box</option>
+                <option value="yesno" ${fuType === "yesno" ? "selected" : ""}>Yes / No question</option>
+              </select>
             </div>
           </div>
         `;
