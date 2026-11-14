@@ -46,6 +46,9 @@
             <a href="{% url 'surveys:dashboard' slug=rel.survey.slug %}" class="btn btn-xs">
               {% trans "Open survey" %}
             </a>
+            <a href="{% url 'appraisal:report_view' pk=rel.pk %}" class="btn btn-ghost btn-xs">
+              {% trans "Report" %}
+            </a>
             <a href="{% url 'surveys:tokens' slug=rel.survey.slug %}" class="btn btn-ghost btn-xs">
               {% trans "Tokens" %}
             </a>

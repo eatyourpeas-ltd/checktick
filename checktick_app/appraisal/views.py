@@ -14,9 +14,10 @@ from typing import Any
 
 from django.contrib import messages
 from django.contrib.auth.decorators import login_required
+from django.core.exceptions import PermissionDenied
 from django.db import models
 from django.http import HttpRequest, HttpResponse
-from django.shortcuts import redirect, render
+from django.shortcuts import get_object_or_404, redirect, render
 from django.utils import timezone
 from django.utils.text import slugify
 from django.views.decorators.http import require_http_methods
@@ -35,8 +36,11 @@ from checktick_app.surveys.models import (
     SurveyMembership,
     SurveyQuestion,
 )
+from checktick_app.surveys.permissions import is_org_admin
+from checktick_app.surveys.views import get_survey_key_from_session
 
-from .models import AppraisalRelationship
+from .models import AppraisalRelationship, AppraisalReportSnapshot
+from .reporting import build_report_document
 
 
 def _org_role(user, org: Organization) -> str | None:
@@ -537,3 +541,123 @@ def adopt_instrument(request: HttpRequest) -> HttpResponse:
         "appraisal/adopt_instrument.html",
         {"org": org, "orgs": orgs, "library": library},
     )
+
+
+def _can_view_report(user, rel: AppraisalRelationship) -> bool:
+    """Appraiser, appraisee, or org owner/admin can view released reports."""
+    if not user.is_authenticated:
+        return False
+    if rel.appraiser_id == user.id or rel.appraisee_id == user.id:
+        return True
+    return is_org_admin(user, rel.organization) or rel.organization.owner_id == user.id
+
+
+@login_required
+@require_http_methods(["GET"])
+def report_view(request: HttpRequest, pk: int) -> HttpResponse:
+    """Released report snapshots for an appraisal (D6).
+
+    Appraisees see exactly what was released — the immutable snapshot —
+    never the live aggregate.
+    """
+    rel = get_object_or_404(
+        AppraisalRelationship.objects.select_related(
+            "survey", "instrument", "appraisee", "appraiser", "organization"
+        ),
+        pk=pk,
+    )
+    if not _can_view_report(request.user, rel):
+        raise PermissionDenied("You do not have permission to view this report.")
+    snapshots = rel.snapshots.select_related("released_by").order_by("-version")
+    version = request.GET.get("version")
+    selected = None
+    if version:
+        try:
+            selected = snapshots.filter(version=int(version)).first()
+        except ValueError:
+            selected = None
+    if selected is None:
+        selected = snapshots.first()
+    return render(
+        request,
+        "appraisal/report.html",
+        {
+            "rel": rel,
+            "snapshots": snapshots,
+            "snapshot": selected,
+            "doc": selected.document if selected else None,
+        },
+    )
+
+
+@login_required
+@require_http_methods(["POST"])
+def report_release(request: HttpRequest, pk: int) -> HttpResponse:
+    """Release a structured report snapshot (D6, §6 step 7).
+
+    Appraiser-only (org admins may also release). The survey must be
+    unlocked when responses are encrypted — the aggregates are computed
+    through the same unlock-gated path as the summary view. The snapshot
+    is immutable: releasing again creates a new version.
+    """
+    rel = get_object_or_404(
+        AppraisalRelationship.objects.select_related(
+            "survey", "instrument", "organization"
+        ),
+        pk=pk,
+    )
+    is_appraiser = rel.appraiser_id == request.user.id
+    if not (
+        is_appraiser
+        or is_org_admin(request.user, rel.organization)
+        or rel.organization.owner_id == request.user.id
+    ):
+        raise PermissionDenied("Only the appraiser can release the report.")
+
+    survey = rel.survey
+    survey_key = get_survey_key_from_session(request, survey.slug)
+    has_encrypted = survey.responses.filter(enc_answers__isnull=False).exists()
+    if has_encrypted and not survey_key:
+        messages.error(
+            request,
+            "Unlock the survey before releasing the report — encrypted "
+            "responses cannot be aggregated while locked.",
+        )
+        return redirect("appraisal:report_view", pk=rel.pk)
+
+    total = survey.responses.count()
+    if total < rel.min_responses:
+        messages.error(
+            request,
+            f"Cannot release: {total} responses is below the minimum "
+            f"threshold of {rel.min_responses} (D5).",
+        )
+        return redirect("appraisal:report_view", pk=rel.pk)
+
+    document = build_report_document(rel, survey_key)
+    last_version = (
+        rel.snapshots.order_by("-version").values_list("version", flat=True).first()
+    )
+    snapshot = AppraisalReportSnapshot.objects.create(
+        relationship=rel,
+        version=(last_version or 0) + 1,
+        released_by=request.user,
+        document=document,
+    )
+    AuditLog.objects.create(
+        actor=request.user,
+        scope=AuditLog.Scope.SURVEY,
+        organization=rel.organization,
+        survey=survey,
+        action=AuditLog.Action.CREATE,
+        target_user=rel.appraisee,
+        severity=AuditLog.Severity.INFO,
+        message="Structured appraisal report released.",
+        metadata={
+            "snapshot_id": snapshot.pk,
+            "version": snapshot.version,
+            "total_responses": total,
+        },
+    )
+    messages.success(request, f"Report v{snapshot.version} released to the appraisee.")
+    return redirect("appraisal:report_view", pk=rel.pk)

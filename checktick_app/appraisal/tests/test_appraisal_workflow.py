@@ -30,8 +30,10 @@ from checktick_app.surveys.models import (
     PublishedQuestionGroup,
     RespondentCategory,
     Survey,
+    SurveyAccessToken,
     SurveyMembership,
     SurveyQuestion,
+    SurveyResponse,
 )
 
 PASSWORD = "x"
@@ -410,3 +412,234 @@ def test_appraisee_distributor_can_access_tokens_not_results(
         ).status_code
         == 403
     )
+
+
+# ---------------------------------------------------------------------------
+# Phase 4 — threshold, structured snapshots, release flow (D5, D6)
+# ---------------------------------------------------------------------------
+
+
+def _make_relationship(org, appraiser, appraisee, instrument, cycle_year=2026):
+    from checktick_app.appraisal.views import _create_appraisal
+
+    return _create_appraisal(
+        org=org,
+        appraiser=appraiser,
+        appraisee=appraisee,
+        instrument=instrument,
+        cycle_year=cycle_year,
+    )
+
+
+def _patient_response(survey):
+    """Anonymous unlisted response — attributed to the patient population."""
+    return SurveyResponse.objects.create(survey=survey, answers={})
+
+
+def _clinician_response(survey, owner):
+    """Token-linked response — attributed to the clinician population."""
+    token = SurveyAccessToken.objects.create(
+        survey=survey,
+        created_by=owner,
+        category_values={"rater_role": "clinician"},
+    )
+    return SurveyResponse.objects.create(survey=survey, answers={}, access_token=token)
+
+
+@pytest.mark.django_db
+def test_population_attribution(org, memberships, appraiser, appraisee, instrument):
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    survey = rel.survey
+    patient = _patient_response(survey)
+    clinician = _clinician_response(survey, appraiser)
+    from checktick_app.appraisal.reporting import population_for_response
+
+    assert population_for_response(patient) == "patient"
+    assert population_for_response(clinician) == "clinician"
+
+
+@pytest.mark.django_db
+def test_release_blocked_below_threshold(
+    client, org, memberships, appraiser, appraisee, instrument
+):
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    rel.min_responses = 5
+    rel.save()
+    _patient_response(rel.survey)  # 1 response, threshold 5
+    client.force_login(appraiser)
+    resp = client.post(reverse("appraisal:report_release", kwargs={"pk": rel.pk}))
+    assert resp.status_code == 302
+    assert rel.snapshots.count() == 0
+
+
+@pytest.mark.django_db
+def test_release_creates_snapshot_with_population_sections(
+    client, org, memberships, appraiser, appraisee, instrument
+):
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    rel.min_responses = 1
+    rel.save()
+    survey = rel.survey
+    # One patient response answering the patient rating grid, one
+    # clinician token response answering the colleague grid.
+    patient_q = SurveyQuestion.objects.filter(
+        survey=survey, group__name="Patient feedback"
+    ).first()
+    clinician_q = SurveyQuestion.objects.filter(
+        survey=survey, group__name="Colleague feedback"
+    ).first()
+    _patient_response(survey)
+    if patient_q is not None:
+        last = SurveyResponse.objects.filter(survey=survey).first()
+        last.answers = {str(patient_q.id): "3"}
+        last.save(update_fields=["answers"])
+    _clinician_response(survey, appraiser)
+    if clinician_q is not None:
+        last = (
+            SurveyResponse.objects.filter(survey=survey)
+            .exclude(access_token=None)
+            .first()
+        )
+        last.answers = {str(clinician_q.id): "3"}
+        last.save(update_fields=["answers"])
+
+    client.force_login(appraiser)
+    resp = client.post(reverse("appraisal:report_release", kwargs={"pk": rel.pk}))
+    assert resp.status_code == 302
+
+    snapshot = rel.snapshots.get(version=1)
+    doc = snapshot.document
+    assert doc["threshold"] == 1
+    assert doc["populations"]["patient"]["responses"] == 1
+    assert doc["populations"]["clinician"]["responses"] == 1
+    assert doc["populations"]["patient"]["threshold_met"]
+    assert doc["populations"]["clinician"]["threshold_met"]
+    # Sections computed for both populations with per-question options.
+    assert doc["sections"]["patient"] is not None
+    assert doc["sections"]["clinician"] is not None
+    # Structure inventory reflects the survey as-built.
+    group_names = [g["group"] for g in doc["structure"]]
+    assert "Patient feedback" in group_names
+    assert "Colleague feedback" in group_names
+    # Audit-logged.
+    assert AuditLog.objects.filter(survey=survey, message__contains="released").exists()
+
+
+@pytest.mark.django_db
+def test_below_threshold_population_suppressed(
+    client, org, memberships, appraiser, appraisee, instrument
+):
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    rel.min_responses = 2
+    rel.save()
+    # Two patient responses (meets threshold), zero clinicians.
+    _patient_response(rel.survey)
+    _patient_response(rel.survey)
+    client.force_login(appraiser)
+    client.post(reverse("appraisal:report_release", kwargs={"pk": rel.pk}))
+
+    doc = rel.snapshots.get(version=1).document
+    assert doc["populations"]["patient"]["threshold_met"] is True
+    assert doc["populations"]["clinician"]["threshold_met"] is False
+    assert doc["sections"]["patient"] is not None
+    assert (
+        doc["sections"]["clinician"] is None
+    ), "below-threshold population must be suppressed (D5)"
+
+
+@pytest.mark.django_db
+def test_release_versions_are_immutable_and_incremented(
+    client, org, memberships, appraiser, appraisee, instrument
+):
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    rel.min_responses = 1
+    rel.save()
+    _patient_response(rel.survey)
+    client.force_login(appraiser)
+    client.post(reverse("appraisal:report_release", kwargs={"pk": rel.pk}))
+    client.post(reverse("appraisal:report_release", kwargs={"pk": rel.pk}))
+    versions = list(rel.snapshots.order_by("version").values_list("version", flat=True))
+    assert versions == [1, 2], "a correction is a new version linked to the old"
+
+
+@pytest.mark.django_db
+def test_appraisee_cannot_release_but_can_view(
+    client, org, memberships, appraiser, appraisee, instrument
+):
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    rel.min_responses = 1
+    rel.save()
+    _patient_response(rel.survey)
+
+    client.force_login(appraisee)
+    resp = client.post(reverse("appraisal:report_release", kwargs={"pk": rel.pk}))
+    assert resp.status_code == 403
+    assert rel.snapshots.count() == 0
+
+    # Appraiser releases; the appraisee can view the released snapshot.
+    client.force_login(appraiser)
+    client.post(reverse("appraisal:report_release", kwargs={"pk": rel.pk}))
+    client.force_login(appraisee)
+    resp = client.get(reverse("appraisal:report_view", kwargs={"pk": rel.pk}))
+    assert resp.status_code == 200
+    assert b"Response summary" in resp.content
+
+
+@pytest.mark.django_db
+def test_outsider_cannot_view_report(
+    client, org, memberships, appraiser, appraisee, instrument, django_user_model
+):
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    rel.min_responses = 1
+    rel.save()
+    _patient_response(rel.survey)
+    client.force_login(appraiser)
+    client.post(reverse("appraisal:report_release", kwargs={"pk": rel.pk}))
+
+    outsider = django_user_model.objects.create_user(
+        username="outsider", password=PASSWORD
+    )
+    client.force_login(outsider)
+    resp = client.get(reverse("appraisal:report_view", kwargs={"pk": rel.pk}))
+    assert resp.status_code == 403
+
+
+@pytest.mark.django_db
+def test_release_requires_unlock_when_encrypted(
+    client, org, memberships, appraiser, appraisee, instrument
+):
+    """Encrypted responses cannot be aggregated while locked — the release
+    is refused until the appraiser unlocks (org key or personal path)."""
+    import base64
+
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    rel.min_responses = 1
+    rel.save()
+    survey = rel.survey
+    # Simulate an encrypted response (enc_answers set, no plaintext).
+    SurveyResponse.objects.create(survey=survey, enc_answers=b"x")
+
+    client.force_login(appraiser)
+    resp = client.post(reverse("appraisal:report_release", kwargs={"pk": rel.pk}))
+    assert resp.status_code == 302
+    assert rel.snapshots.count() == 0, "locked survey must not release"
+
+    # Unlock via the legacy session path (re-derives the key directly).
+    from django.utils import timezone as tz
+
+    from checktick_app.surveys.utils import encrypt_sensitive
+
+    session = client.session
+    session["unlock_credentials"] = base64.b64encode(
+        encrypt_sensitive(
+            session.session_key.encode("utf-8"),
+            {"legacy_key": base64.b64encode(b"k" * 32).decode()},
+        )
+    ).decode()
+    session["unlock_method"] = "legacy"
+    session["unlock_verified_at"] = tz.now().isoformat()
+    session["unlock_survey_slug"] = survey.slug
+    session.save()
+    resp = client.post(reverse("appraisal:report_release", kwargs={"pk": rel.pk}))
+    assert resp.status_code == 302
+    assert rel.snapshots.count() == 1

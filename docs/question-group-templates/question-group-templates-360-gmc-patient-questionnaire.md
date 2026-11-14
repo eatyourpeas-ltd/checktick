@@ -18,10 +18,11 @@ attribution:
 CATEGORIES
   rater_role:
     label: Rater Role
-    values: patient
-    source: unlisted
+    values: clinician, patient
+    source: token
 
-# Patient Questionnaire {patient-questionnaire-1}
+# Patient Introduction {patient-introduction}    ~ cat:rater_role:patient
+Patient Introduction
 
 ## Content block {content-block}
 (content_block)
@@ -83,18 +84,57 @@ na: Does not apply
 ## Please add any other comments you want to make about this doctor. Please note: No patients will be identified when this information is given to the doctor. {please-add-any-other-comments}
 (long_text)
 
-## Are you: {are-you:}
-(yesno)
-- Female
-- Male
+# Colleague Introduction {colleague-introduction}    ~ cat:rater_role:clinician
+Colleague Introduction
 
-## Age {age}
-(mc_single)
-- Under 15
-- 15-20
-- 21-40
-- 41-60
-- 60 or over
+## Content block {content-block}
+(content_block)
+heading: Colleague Feedback
+
+Licensed doctors are expected to seek feedback from colleagues and patients and review and act upon that feedback where
+appropriate.
+The purpose of this exercise is to provide doctors with information about their work through the eyes of those they work with and
+treat, and is intended to help inform their further development.
+Please do not write your name on this questionnaire.
+Please answer all the questions. If you feel you cannot answer any question, please tick ‘Don’t know’
+
+## Please rate your colleague in each of the following areas by ticking one box in each line. {please-rate-your-colleague-in}
+(grid likert categories)
+- Poor
+- Less than Satisfactory
+- Satisfactory
+- Good
+- Very Good
+na: Don't know
+### Clinical Knowledge*
+### Diagnosis*
+### Clinical decision making*
+### Treatment (including practical procedures)*
+### Prescribing*
+### Medical record keeping*
+### Recognising and working within limitations*
+### Keeping knowledge and skills up to date*
+### Reviewing and reflecting on own performance*
+### Teaching (students, trainees, others)*
+### Supervising colleagues*
+### Commitment to care and wellbeing of patients*
+### Communication with patients and relatives*
+### Working effectively with colleagues*
+### Effective time management*
+### This doctor respects patient confidentiality*
+### This doctor is honest and trustworthy*
+### This doctor’s performance is not impaired by ill health*
+
+## This doctor is fit to practise medicine* {this-doctor-is-fit-to-practise}
+(yesno)
+- Yes
+- No
+- Don't know
+
+## Please add any other comments you want to make about this doctor. Please note: No one will be identified when this information is given back to the doctor. {please-add-any-other-comments}
+(long_text)
+
+# Ethnicity Questions {ethnicity-questions}    ~ cat:rater_role:clinician, cat:rater_role:patient
 
 ## What is your ethnic group? Please choose one section from A to E, and then tick the appropriate box to indicate your cultural background {what-is-your-ethnic-group?-ple}
 (mc_single)
@@ -102,27 +142,71 @@ na: Does not apply
 - British
 - Irish
 - Any other white background
-  + Please elaborate
 - [B Mixed]
 - White and black Caribbean
 - White and black African
 - White and Asian
 - Any other Mixed background
-  + Please elaborate
 - [C Asian or Asian British]
 - Indian
 - Pakistani
 - Bangladeshi
 - Any other Asian background
-  + Please elaborate
 - [D Black or Black British]
 - Caribbean
 - African
 - Any other Black background
-  + Please elaborate
 - [E Chinese or other ethnic group]
 - Chinese
 - Any other
-  + Please elaborate
--
-render: cascading
+render: cascading_radios
+
+# Sex/Gender Questions {sex/gender-questions}    ~ cat:rater_role:clinician, cat:rater_role:patient
+
+## Are you: {are-you:}
+(yesno)
+- Female
+- Male
+
+# Age Questions {age-questions}    ~ cat:rater_role:clinician, cat:rater_role:patient
+
+## Age* {age}
+(mc_single)
+- 16 - 19
+- 20 - 29
+- 30 - 39
+- 40 - 49
+- 50 - 59
+- 60 or over
+
+# Professional Role {professional-role}    ~ cat:rater_role:clinician
+
+## Your professional role (please tick only one box):* {your-professional-role-(please}
+(mc_single)
+- Doctor
+- Registered Nurse
+- Health Visitor/Midwife
+- Pharmacist
+- Administrator/Receptionist/Secretary
+- Allied Healthcare Professional
+- Health Care Assistant
+- Non-clinical Manager
+- Other
+  + Please specify
+
+# Professional Relationship {professional-relationship}    ~ cat:rater_role:clinician
+
+## How recently have you been familiar with this doctor’s clinical practice?* {how-recently-have-you-been-fam}
+(mc_single)
+- Current colleague
+- Within the last two years
+- Between two and five years ago
+- Between six and ten years ago
+- More than ten years ago
+
+## During this period of your familiarity with this doctor’s clinical practice, how often did you have contact with the doctor?* {during-this-period-of-your-fam}
+(mc_single)
+- Most days
+- Weekly
+- Monthly
+- Less often

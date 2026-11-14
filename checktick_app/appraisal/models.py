@@ -69,6 +69,14 @@ class AppraisalRelationship(models.Model):
     status = models.CharField(
         max_length=10, choices=Status.choices, default=Status.ACTIVE
     )
+    min_responses = models.PositiveIntegerField(
+        default=5,
+        help_text=(
+            "Minimum responses per rater population before the report can "
+            "be released (D5 — anonymity protection; populations below the "
+            "threshold are suppressed in the released report)"
+        ),
+    )
     created_at = models.DateTimeField(auto_now_add=True)
     closed_at = models.DateTimeField(null=True, blank=True)
 
@@ -86,3 +94,39 @@ class AppraisalRelationship(models.Model):
             f"Appraisal {self.cycle_year}: {self.appraisee} "
             f"(appraiser {self.appraiser})"
         )
+
+
+class AppraisalReportSnapshot(models.Model):
+    """An immutable, structured released report (D6).
+
+    Generated at release time from the survey as-built — counts and
+    percentages per question, split by rater population, with
+    below-threshold populations suppressed. Never regenerated: a
+    correction means a new version linked to the old.
+    """
+
+    relationship = models.ForeignKey(
+        AppraisalRelationship,
+        on_delete=models.CASCADE,
+        related_name="snapshots",
+    )
+    version = models.PositiveIntegerField(default=1)
+    released_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name="appraisal_reports_released",
+    )
+    document = models.JSONField()
+    created_at = models.DateTimeField(auto_now_add=True)
+
+    class Meta:
+        constraints = [
+            models.UniqueConstraint(
+                fields=["relationship", "version"],
+                name="unique_snapshot_version_per_relationship",
+            )
+        ]
+        ordering = ["-version"]
+
+    def __str__(self) -> str:
+        return f"Report v{self.version} for {self.relationship}"
