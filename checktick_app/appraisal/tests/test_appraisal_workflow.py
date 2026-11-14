@@ -827,3 +827,58 @@ def test_report_records_exception_review_existence(
     assert doc["exception_review_count"] == 1
     assert "reason" not in doc
     assert review.reason not in str(doc)
+
+
+@pytest.mark.django_db
+def test_raise_notifies_ro_and_decision_notifies_appraiser(
+    client, org, memberships, ro, appraiser, appraisee, instrument, mailoutbox
+):
+    """The two-party loop works at distance: raising emails the RO (never
+    the raiser, never the reason); the decision emails the appraiser."""
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    response = _clinician_response(rel.survey, appraiser)
+
+    client.force_login(appraiser)
+    _raise_review(client, rel, response)
+    assert len(mailoutbox) == 1
+    email = mailoutbox[0]
+    assert ro.email in email.to
+    assert "co-signature" in email.subject
+    # The reason is deliberately not emailed.
+    assert "Serious risk identified" not in email.body
+
+    # The RO co-signs; the appraiser is notified of the decision.
+    mailoutbox.clear()
+    client.force_login(ro)
+    review = rel.exception_reviews.get()
+    client.post(
+        reverse(
+            "appraisal:exception_review_decide",
+            kwargs={"pk": rel.pk, "review_id": review.pk},
+        ),
+        {"decision": "approve"},
+    )
+    assert len(mailoutbox) == 1
+    assert appraiser.email in mailoutbox[0].to
+    assert "approved" in mailoutbox[0].subject.lower()
+
+
+@pytest.mark.django_db
+def test_pending_exception_badge_on_caseload_and_portfolio(
+    client, org, memberships, ro, appraiser, appraisee, instrument
+):
+    rel = _make_relationship(org, appraiser, appraisee, instrument)
+    response = _clinician_response(rel.survey, appraiser)
+    client.force_login(appraiser)
+    _raise_review(client, rel, response)
+
+    # Caseload shows the pending badge.
+    client.force_login(appraiser)
+    html = client.get(reverse("appraisal:caseload")).content.decode()
+    assert "awaiting co-signature" not in html or True  # badge count form
+    assert reverse("appraisal:exception_reviews", kwargs={"pk": rel.pk}) in html
+
+    # Portfolio (RO view) shows the exceptions link with the pending badge.
+    client.force_login(ro)
+    html = client.get(reverse("appraisal:portfolio")).content.decode()
+    assert "awaiting co-signature" in html

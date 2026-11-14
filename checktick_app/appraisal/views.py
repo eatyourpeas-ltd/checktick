@@ -9,10 +9,12 @@ wrap, tokens, categories); nothing here adds new permission primitives
 from __future__ import annotations
 
 from copy import deepcopy
+import logging
 import secrets
 from typing import Any
 
 from django.contrib import messages
+from django.contrib.auth import get_user_model
 from django.contrib.auth.decorators import login_required
 from django.core.exceptions import PermissionDenied
 from django.db import models
@@ -46,6 +48,8 @@ from .models import (
     AppraisalReportSnapshot,
 )
 from .reporting import build_report_document
+
+logger = logging.getLogger(__name__)
 
 
 def _org_role(user, org: Organization) -> str | None:
@@ -187,6 +191,14 @@ def caseload(request: HttpRequest) -> HttpResponse:
             appraiser=request.user, organization__in=orgs
         )
         .select_related("appraisee", "survey", "instrument", "organization")
+        .annotate(
+            pending_exceptions=models.Count(
+                "exception_reviews",
+                filter=models.Q(
+                    exception_reviews__status=AppraisalExceptionReview.Status.REQUESTED
+                ),
+            )
+        )
         .order_by("-cycle_year")
     )
     # Count-only response figures: no response content, no demographics
@@ -452,6 +464,14 @@ def portfolio(request: HttpRequest) -> HttpResponse:
     relationships = (
         AppraisalRelationship.objects.filter(organization=org)
         .select_related("appraisee", "appraiser", "survey", "instrument")
+        .annotate(
+            pending_exceptions=models.Count(
+                "exception_reviews",
+                filter=models.Q(
+                    exception_reviews__status=AppraisalExceptionReview.Status.REQUESTED
+                ),
+            )
+        )
         .order_by("-cycle_year")
     )
     for rel in relationships:
@@ -752,6 +772,36 @@ def exception_review_raise(request: HttpRequest, pk: int) -> HttpResponse:
             # may quote the response (house logging rules).
         },
     )
+    # Notify the Responsible Officers at distance (§9): the RO and the
+    # appraiser are rarely co-located. Email every org owner/admin
+    # except the raiser; the reason is deliberately not emailed.
+    from checktick_app.core.email_utils import (
+        send_exception_review_raised_email,
+    )
+
+    ros = (
+        get_user_model()
+        .objects.filter(
+            models.Q(organizations=rel.organization)
+            | models.Q(
+                org_memberships__organization=rel.organization,
+                org_memberships__role=OrganizationMembership.Role.ADMIN,
+            ),
+            is_active=True,
+        )
+        .exclude(pk=request.user.pk)
+    )
+    for ro in ros:
+        try:
+            send_exception_review_raised_email(ro, review)
+        except Exception:
+            logger.exception(
+                "Failed to send exception review notification",
+                extra={
+                    "review_id": review.pk,
+                    "ro_id": ro.pk,
+                },
+            )
     messages.success(request, "Exception review raised — awaiting RO co-signature.")
     return redirect("appraisal:exception_reviews", pk=rel.pk)
 
@@ -829,6 +879,20 @@ def exception_review_decide(
         messages.info(request, "Exception review rejected.")
     else:
         messages.error(request, "Unknown decision.")
+        return redirect("appraisal:exception_reviews", pk=rel.pk)
+
+    # Close the loop at distance: tell the appraiser the decision.
+    from checktick_app.core.email_utils import (
+        send_exception_review_decided_email,
+    )
+
+    try:
+        send_exception_review_decided_email(review)
+    except Exception:
+        logger.exception(
+            "Failed to send exception review decision email",
+            extra={"review_id": review.pk},
+        )
     return redirect("appraisal:exception_reviews", pk=rel.pk)
 
 

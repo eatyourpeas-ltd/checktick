@@ -48,6 +48,12 @@
             <a href="{% url 'surveys:dashboard' slug=rel.survey.slug %}" class="btn btn-xs">
               {% trans "Open survey" %}
             </a>
+            <a href="{% url 'appraisal:exception_reviews' pk=rel.pk %}" class="btn btn-ghost btn-xs">
+              {% trans "Exceptions" %}
+              {% if rel.pending_exceptions %}
+                <span class="badge badge-warning badge-sm">{{ rel.pending_exceptions }} {% trans "awaiting co-signature" %}</span>
+              {% endif %}
+            </a>
           </td>
         </tr>
         {% endfor %}

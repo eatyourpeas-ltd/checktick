@@ -51,6 +51,9 @@
             </a>
             <a href="{% url 'appraisal:exception_reviews' pk=rel.pk %}" class="btn btn-ghost btn-xs">
               {% trans "Exceptions" %}
+              {% if rel.pending_exceptions %}
+                <span class="badge badge-warning badge-sm">{{ rel.pending_exceptions }}</span>
+              {% endif %}
             </a>
             <a href="{% url 'surveys:tokens' slug=rel.survey.slug %}" class="btn btn-ghost btn-xs">
               {% trans "Tokens" %}
