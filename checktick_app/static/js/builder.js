@@ -591,14 +591,9 @@
       }
     }
 
-    const groupSelect = form.querySelector('select[name="group_id"]');
-    if (groupSelect) {
-      if (payload.group_id) {
-        groupSelect.value = String(payload.group_id);
-      } else {
-        groupSelect.value = "";
-      }
-    }
+    // Note: the edit pane has no section selector — the section is implied
+    // by the route/URL. Moving between sections uses the card's Move button
+    // (builder_question_move routes), not this form.
 
     if (textInput && textInput.focus) {
       textInput.focus();
@@ -784,6 +779,118 @@
     if (!list) return false;
     return list.querySelector("[data-qid]") === null;
   }
+
+  // --- Move question to another section ---
+  // Opened from each card's Move button. The modal is static (rendered once
+  // by survey_builder.html, outside the swapped panes), so this is pure
+  // event delegation — no re-init needed after HTMX swaps.
+  function initMoveModal() {
+    const modal = document.getElementById("move-question-modal");
+    if (!modal || modal.dataset.moveBound) return;
+    modal.dataset.moveBound = "1";
+    const form = document.getElementById("move-question-form");
+    const targetSelect = document.getElementById("move-question-target");
+    const summary = document.getElementById("move-question-summary");
+    const notices = document.getElementById("move-question-notices");
+    const cancelBtn = document.getElementById("move-question-cancel-btn");
+    if (!form || !targetSelect) return;
+
+    document.addEventListener("click", function (e) {
+      const btn = e.target.closest(".builder-move-button");
+      if (!btn) return;
+      e.preventDefault();
+      e.stopPropagation();
+
+      const current = btn.dataset.currentGroup || "";
+      form.dataset.moveUrl = btn.dataset.moveUrl || "";
+
+      // Reset and disable the current section so it can't be picked.
+      Array.from(targetSelect.options).forEach(function (opt) {
+        opt.disabled = opt.dataset.gname === current;
+      });
+      if (targetSelect.selectedOptions[0] && targetSelect.selectedOptions[0].disabled) {
+        const firstEnabled = Array.from(targetSelect.options).find(function (o) {
+          return !o.disabled;
+        });
+        if (firstEnabled) targetSelect.value = firstEnabled.value;
+      }
+
+      if (summary) {
+        summary.textContent = current
+          ? 'Move this question out of "' + current + '" into:'
+          : "Move this question into a section:";
+      }
+
+      if (notices) {
+        const out = parseInt(btn.dataset.out || "0", 10);
+        const inc = parseInt(btn.dataset.in || "0", 10);
+        const anchor = btn.dataset.anchor === "1";
+        const items = [];
+        if (out > 0) {
+          items.push(
+            (out === 1 ? "Branching rule" : out + " branching rules") +
+              " attached to this question move with it."
+          );
+        }
+        if (inc > 0) {
+          items.push(
+            (inc === 1 ? "A skip-ahead rule" : inc + " skip-ahead rules") +
+              " target this question from elsewhere. They keep pointing at it, so after the move they will land in its new section."
+          );
+        }
+        if (anchor) {
+          items.push(
+            'Skip-ahead rules that target the section "' +
+              current +
+              '" land on its first question. Moving this question out will re-point them at whatever becomes the first question in that section. Check the Survey Map after moving.'
+          );
+        }
+        notices.textContent = "";
+        if (items.length) {
+          notices.hidden = false;
+          items.forEach(function (text) {
+            const alert = document.createElement("div");
+            alert.className =
+              anchor && text.indexOf("Skip-ahead rules that target") === 0
+                ? "alert alert-warning py-2 px-3 text-xs"
+                : "alert alert-info py-2 px-3 text-xs";
+            alert.setAttribute("role", "status");
+            alert.textContent = text;
+            notices.appendChild(alert);
+          });
+        } else {
+          notices.hidden = true;
+        }
+      }
+
+      if (modal.showModal) modal.showModal();
+    });
+
+    form.addEventListener("submit", function (e) {
+      e.preventDefault();
+      const url = form.dataset.moveUrl || "";
+      if (!url || !window.htmx) return;
+      window.htmx.ajax(
+        "POST",
+        url,
+        {
+          target: "#questions-list",
+          swap: "outerHTML",
+          values: { target_gid: targetSelect.value },
+        },
+      );
+      modal.close();
+    });
+
+    if (cancelBtn) {
+      cancelBtn.addEventListener("click", function () {
+        modal.close();
+      });
+    }
+  }
+
+  document.addEventListener("DOMContentLoaded", initMoveModal);
+  if (document.readyState !== "loading") initMoveModal();
 
   document.addEventListener("DOMContentLoaded", function () {
     initSortable(document);

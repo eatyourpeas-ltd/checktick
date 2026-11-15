@@ -214,6 +214,30 @@
     </form>
   </div>
 </dialog>
+
+{# Move question to another section — opened from a question card's Move button. #}
+<dialog id="move-question-modal" class="modal">
+  <div class="modal-box">
+    <h3 class="font-bold text-lg">{% trans 'Move question' %}</h3>
+    <p class="text-sm text-base-content/70 py-2" id="move-question-summary"></p>
+    <form method="post" id="move-question-form"></form>
+      {% csrf_token %}
+      <div class="mt-2">
+        <label class="label">{% trans 'Move to section' %}</label>
+        <select class="select select-bordered w-full" name="target_gid" id="move-question-target" required>
+          {% for g in groups %}
+            <option value="{{ g.id }}" data-gname="{{ g.name }}">{{ g.name }}</option>
+          {% endfor %}
+        </select>
+      </div>
+      <div id="move-question-notices" class="mt-3 space-y-2" hidden></div>
+      <div class="modal-action">
+        <button class="btn" type="button" id="move-question-cancel-btn">{% trans 'Cancel' %}</button>
+        <button class="btn btn-primary" type="submit">{% trans 'Move' %}</button>
+      </div>
+    </form>
+  </div>
+</dialog>
 {% endif %}
 
 <script src="{% static cdn_assets.sortablejs.static_file %}"

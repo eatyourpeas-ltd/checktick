@@ -29,6 +29,7 @@ All routes live under `/<slug>/builder/...` (see `surveys/urls.py`).
 | `.../questions/<qid>/edit` | `builder_question_edit` | single `question_row.html` |
 | `.../questions/<qid>/copy` | `builder_question_copy` | `questions_list.html` fragment |
 | `.../questions/<qid>/delete` | `builder_question_delete` | `questions_list.html` fragment |
+| `.../questions/<qid>/move` | `builder_question_move` | `questions_list.html` fragment + rail OOB |
 | `.../questions/reorder` | `builder_questions_reorder` | `questions_list.html` fragment |
 
 The `_group_` variants (`builder_group_question_edit`, etc.) are the same
@@ -50,7 +51,9 @@ flowchart TD
 ```
 
 1. **POST contract.** Every type posts the same base fields (`text`, `type`,
-   `required`, `hidden_by_default`, `group_id`) plus per-type extras. The
+   `required`, `hidden_by_default`) plus per-type extras. (The section is
+   implied by the route, not a form field; moving between sections uses the
+   dedicated move routes below.) The
    parse is centralised in `_parse_builder_question_form(data)`, which
    normalises inputs per type (e.g. min/max for Likert number, labels for
    Yes/No) and returns `{"text", "type", "required", "hidden_by_default",
@@ -133,6 +136,41 @@ A grid is a stem with no answer of its own plus rows sharing one scale.
   headings + `na:` — see [Import](import.md#grid-of-sub-questions). The
   parser and both export paths (`_export_survey_to_markdown`,
   `_export_question_group_to_markdown`) round-trip the scale and rows.
+
+## Moving questions between sections
+
+Each question card has a **Move** button (alongside Copy/Delete) that opens a
+small modal listing the other sections. Submitting POSTs `target_gid` to one
+of the move routes above; both share `_perform_builder_question_move`.
+
+- **Placement.** The question is appended to the *end* of the target section
+  (`max(order) + 1` within that section). Appending is deliberate: jump_to
+  rules that target a **section** resolve to its first question at
+  config-build time (`_resolve_section_target_question`), so a move can never
+  silently re-anchor the destination section's jumps.
+- **Grids move as a block.** Moving a grid stem also sets `group` on its rows;
+  row `order` values are untouched (rows render under the stem ordered among
+  themselves, so relative order is preserved).
+- **Branching semantics.** Conditions are FKs, so:
+  - Rules *attached to* the moved question (`question` FK) travel with it.
+  - Rules *targeting* the question (`target_question` FK) keep pointing at it;
+    the jump simply lands in its new section.
+  - Rules targeting the moved question's *old section* (`target_group`) are
+    the only hazard: they resolve to that section's first question. If the
+    moved question **is** that anchor, the jumps re-point to whatever becomes
+    first after the move.
+- **Signposting.** `_prepare_question_rendering` attaches a `move_info` dict
+  to every top-level question (`outgoing_conditions`, `incoming_jumps`,
+  `is_section_anchor`) via `_attach_move_notices`. The card's Move button
+  carries these as `data-out` / `data-in` / `data-anchor` attributes, and the
+  modal (`#move-question-modal`, static in `survey_builder.html`) renders an
+  info notice for the first two and a warning for the anchor case, advising a
+  Survey Map check afterwards.
+- **Rail refresh.** The move response re-renders the source section's list
+  and includes `builder_section_rail.html` as an OOB swap (gated on a
+  `rail_oob` context flag) so section counts stay in sync. The modal closes
+  on any successful response; error/success messages appear in the list
+  fragment's alert.
 
 ## Reordering
 

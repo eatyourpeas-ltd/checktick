@@ -78,6 +78,16 @@
             {% include 'surveys/partials/question_preview.html' %}
           </div>
           <div class="flex items-center gap-2 ml-auto pr-1">
+            {% with mi=q.move_info|default:'' %}
+            <button type="button" class="btn btn-xs btn-outline builder-move-button" data-drag-ignore
+                    data-move-url="{% if group %}/surveys/{{ q.survey.slug }}/builder/groups/{{ group.id }}{% else %}/surveys/{{ q.survey.slug }}/builder{% endif %}/questions/{{ q.id }}/move"
+                    data-current-group="{% if group %}{{ group.name }}{% else %}(no section){% endif %}"
+                    data-out="{{ mi.outgoing_conditions|default:0 }}"
+                    data-in="{{ mi.incoming_jumps|default:0 }}"
+                    data-anchor="{{ mi.is_section_anchor|yesno:'1,' }}"
+                    title="{% trans 'Move to another section' %}"
+                    aria-label="{% trans 'Move' %} {{ q.text|truncatechars:40 }} to another section">Move</button>
+            {% endwith %}
             {% if group and q.type != 'template_patient' and q.type != 'template_professional' and q.type != 'content_block' %}
               <button type="button" class="btn btn-xs btn-accent builder-edit-button" data-drag-ignore data-action="edit-question" data-payload-id="{{ payload_id }}" data-edit-url="/surveys/{{ q.survey.slug }}/builder/groups/{{ group.id }}/questions/{{ q.id }}/edit">{% if q.type == 'image' %}Upload/Edit Images{% else %}Edit{% endif %}</button>
               <form method="post" hx-post="/surveys/{{ q.survey.slug }}/builder/groups/{{ group.id }}/questions/{{ q.id }}/copy" hx-target="#questions-list" hx-swap="outerHTML">
@@ -308,15 +318,9 @@
               <label class="label mt-2">Options (one per line)</label>
               <textarea name="options" class="textarea textarea-bordered w-full">{% for opt in q.options %}{{ opt }}
 {% endfor %}</textarea>
-              <label class="label mt-2">Group</label>
-              <select name="group_id" class="select select-bordered w-full">
-                <option value="">(none)</option>
-                {% with selectable_groups=groups|default:q.survey.question_groups.all %}
-                {% for g in selectable_groups %}
-                  <option value="{{ g.id }}" {% if q.group and q.group.id == g.id %}selected{% endif %}>{{ g.name }}</option>
-                {% endfor %}
-                {% endwith %}
-              </select>
+              {# No section selector here: the edit view ignores group_id, so it
+                 was a silent no-op. Move questions between sections via the
+                 card's Move button (builder_question_move routes) instead. #}
               <div class="mt-3">
                 <button class="btn btn-primary btn-sm" type="submit">Save</button>
               </div>

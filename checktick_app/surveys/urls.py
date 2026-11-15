@@ -442,6 +442,16 @@ urlpatterns = [
         name="builder_group_question_delete",
     ),
     path(
+        "<slug:slug>/builder/questions/<int:qid>/move",
+        views.builder_question_move,
+        name="builder_question_move",
+    ),
+    path(
+        "<slug:slug>/builder/groups/<int:gid>/questions/<int:qid>/move",
+        views.builder_group_question_move,
+        name="builder_group_question_move",
+    ),
+    path(
         "<slug:slug>/builder/questions/reorder",
         views.builder_questions_reorder,
         name="builder_questions_reorder",
