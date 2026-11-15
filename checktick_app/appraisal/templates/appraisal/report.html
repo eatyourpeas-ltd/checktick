@@ -23,9 +23,9 @@
   {% if snapshots|length > 1 %}
   <div class="mb-4">
     <label class="label" for="version-select">{% trans "Version" %}</label>
-    <select name="version" id="version-select" class="select select-bordered select-sm" onchange="window.location=this.value">
+    <select name="version" id="version-select" class="select select-bordered select-sm" data-version-select>
       {% for s in snapshots %}
-      <option value="?version={{ s.version }}" {% if s == snapshot %}selected{% endif %}>v{{ s.version }} — {{ s.created_at|date:"Y-m-d H:i" }}</option>
+      <option value="{{ s.version }}" {% if s == snapshot %}selected{% endif %}>v{{ s.version }} — {{ s.created_at|date:"Y-m-d H:i" }}</option>
       {% endfor %}
     </select>
   </div>
@@ -162,4 +162,19 @@
     {% endif %}
   </div>
 </div>
+{% endblock %}
+
+{% block extra_js %}
+<script nonce="{{ request.csp_nonce }}">
+  // CSP-safe replacement for the removed inline onchange handler.
+  // Navigate via URLSearchParams so the version value is never
+  // reinterpreted as HTML (CodeQL js/xss-through-dom).
+  document.querySelectorAll('[data-version-select]').forEach(function (el) {
+    el.addEventListener('change', function () {
+      var url = new URL(window.location.href);
+      url.searchParams.set('version', el.value);
+      window.location.assign(url.toString());
+    });
+  });
+</script>
 {% endblock %}
