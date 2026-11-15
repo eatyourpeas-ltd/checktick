@@ -10,3 +10,4 @@
     {% endfor %}
   </ul>
 </div>
+{% if rail_oob %}{# OOB swap of the section rail after a move (counts change). #}{% include 'surveys/partials/builder_section_rail.html' with rail_oob=1 %}{% endif %}

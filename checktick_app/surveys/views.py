@@ -2840,6 +2840,72 @@ def _grid_scale(options: Any) -> dict[str, Any]:
     return {}
 
 
+def _attach_move_notices(survey: Survey, questions: list[SurveyQuestion]) -> None:
+    """Attach per-question ``move_info`` used by the builder Move button.
+
+    The dict summarises the branching side-effects of moving the question to
+    another section, so the Move modal can signpost them before the user
+    confirms:
+
+    - ``outgoing_conditions`` — rules attached to this question; they travel
+      with it (FK on the question).
+    - ``incoming_jumps`` — jump_to rules from other questions targeting this
+      question; they keep pointing at it, so the jump will land in its new
+      section.
+    - ``is_section_anchor`` — the question is currently the first question of
+      its section AND there are jump_to rules targeting the section itself
+      (``target_group``). Those resolve to the first question at config-build
+      time, so moving the anchor out re-points them at whatever becomes first.
+    """
+    top_level = [q for q in questions if q.id is not None]
+    if not top_level:
+        return
+    ids = [q.id for q in top_level]
+    group_ids = list({q.group_id for q in top_level if q.group_id})
+    try:
+        incoming: dict[int, int] = {}
+        if ids:
+            for row in (
+                SurveyQuestionCondition.objects.filter(
+                    target_question_id__in=ids,
+                    action=SurveyQuestionCondition.Action.JUMP_TO,
+                )
+                .values("target_question_id")
+                .annotate(n=models.Count("id"))
+            ):
+                incoming[row["target_question_id"]] = row["n"]
+        section_jump_groups: set[int] = set()
+        if group_ids:
+            section_jump_groups = set(
+                SurveyQuestionCondition.objects.filter(
+                    target_group_id__in=group_ids,
+                    action=SurveyQuestionCondition.Action.JUMP_TO,
+                ).values_list("target_group_id", flat=True)
+            )
+        anchors: set[int] = set()
+        if section_jump_groups:
+            for gid in section_jump_groups:
+                first_q = _resolve_section_target_question(
+                    survey,
+                    QuestionGroup.objects.get(id=gid, surveys=survey),
+                )
+                if first_q is not None:
+                    anchors.add(first_q.id)
+    except Exception as exc:  # pragma: no cover - defensive guard
+        logger.exception("Failed to compute move notices: %s", exc)
+        incoming, anchors = {}, set()
+    for q in top_level:
+        setattr(
+            q,
+            "move_info",
+            {
+                "outgoing_conditions": len(q.conditions.all()),
+                "incoming_jumps": incoming.get(q.id, 0),
+                "is_section_anchor": q.id in anchors,
+            },
+        )
+
+
 def _prepare_question_rendering(
     survey: Survey, questions: Iterable[SurveyQuestion] | None = None
 ) -> list[SurveyQuestion]:
@@ -2908,6 +2974,8 @@ def _prepare_question_rendering(
         if not hasattr(q, "grid_rows"):
             setattr(q, "grid_rows", [])
     questions_iter = [q for q in questions_iter if not _is_grid_row(q)]
+
+    _attach_move_notices(survey, questions_iter)
 
     all_questions_meta: list[dict[str, Any]] = []
     try:
@@ -3048,6 +3116,9 @@ def _prepare_question_rendering(
 
 
 def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
+    # Note: no group_id here — a question's section is implied by the route
+    # (group variants filter by gid). Moving between sections uses the
+    # dedicated builder_question_move / builder_group_question_move routes.
     from django.utils.html import strip_tags as _strip_tags
 
     text = _strip_tags((data.get("text") or "").strip())
@@ -14091,6 +14162,122 @@ def builder_group_question_delete(
             "message": "Question deleted.",
         },
     )
+
+
+def _builder_move_rail_context(request: HttpRequest, survey: Survey) -> dict:
+    """Context for an OOB rail swap after a question move (counts change)."""
+    order_ids = _resolved_group_order_ids(survey)
+    groups_qs = survey.question_groups.annotate(
+        q_count=models.Count(
+            "surveyquestion", filter=models.Q(surveyquestion__survey=survey)
+        )
+    )
+    groups_map = {g.id: g for g in groups_qs}
+    groups = [groups_map[gid] for gid in order_ids if gid in groups_map]
+    return {
+        "survey": survey,
+        "groups": groups,
+        "active_group": groups[0] if groups else None,
+        "repeat_info": _build_repeat_info(survey, groups),
+        "can_edit": can_edit_survey(request.user, survey),
+        "rail_oob": 1,
+    }
+
+
+def _perform_builder_question_move(
+    request: HttpRequest,
+    survey: Survey,
+    q: SurveyQuestion,
+    source_group: QuestionGroup | None,
+) -> HttpResponse:
+    """Shared implementation for the two move routes.
+
+    Moves the question (plus grid rows as a block) to the end of the target
+    section. Appending at the end is deliberate: jump_to rules that target a
+    section resolve to its first question at config-build time, so a move can
+    never accidentally re-anchor the *destination* section's jumps.
+    """
+    target_gid_raw = request.POST.get("target_gid", "")
+    if not target_gid_raw.isdigit():
+        message = "Choose a section to move the question to."
+    else:
+        target = QuestionGroup.objects.filter(
+            id=int(target_gid_raw), surveys=survey
+        ).first()
+        if target is None:
+            message = "That section no longer exists."
+        elif source_group is not None and target.id == source_group.id:
+            message = "The question is already in that section."
+        else:
+            rows = (
+                list(SurveyQuestion.objects.filter(parent=q))
+                if q.type == SurveyQuestion.Types.GRID
+                else []
+            )
+            max_order = (
+                survey.questions.filter(group=target)
+                .aggregate(models.Max("order"))
+                .get("order__max")
+            )
+            q.group = target
+            q.order = (max_order or 0) + 1
+            q.save(update_fields=["group", "order"])
+            for row in rows:
+                row.group = target
+                row.save(update_fields=["group"])
+            if rows:
+                message = f'Grid and its {len(rows)} row(s) moved to "{target.name}".'
+            else:
+                message = f'Question moved to "{target.name}".'
+
+    questions_qs = survey.questions.select_related("group")
+    if source_group is not None:
+        questions_qs = questions_qs.filter(group=source_group)
+        template_name = "surveys/partials/questions_list_group.html"
+        ctx = {
+            "survey": survey,
+            "group": source_group,
+            "questions": _prepare_question_rendering(survey, questions_qs),
+            "message": message,
+        }
+    else:
+        questions_qs = questions_qs.filter(group__isnull=True)
+        template_name = "surveys/partials/questions_list.html"
+        ctx = {
+            "survey": survey,
+            "questions": _prepare_question_rendering(survey, questions_qs),
+            "groups": survey.question_groups.filter(owner=request.user),
+            "message": message,
+        }
+    ctx.update(_builder_move_rail_context(request, survey))
+    return render(request, template_name, ctx)
+
+
+@login_required
+@require_http_methods(["POST"])
+def builder_question_move(request: HttpRequest, slug: str, qid: int) -> HttpResponse:
+    """Move an ungrouped builder question into a section (POST target_gid)."""
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+    q = get_object_or_404(
+        SurveyQuestion, id=qid, survey=survey, group__isnull=True, parent__isnull=True
+    )
+    return _perform_builder_question_move(request, survey, q, source_group=None)
+
+
+@login_required
+@require_http_methods(["POST"])
+def builder_group_question_move(
+    request: HttpRequest, slug: str, gid: int, qid: int
+) -> HttpResponse:
+    """Move a builder question from one section to another (POST target_gid)."""
+    survey = get_object_or_404(Survey, slug=slug)
+    require_can_edit(request.user, survey)
+    group = get_object_or_404(QuestionGroup, id=gid, surveys=survey)
+    q = get_object_or_404(
+        SurveyQuestion, id=qid, survey=survey, group=group, parent__isnull=True
+    )
+    return _perform_builder_question_move(request, survey, q, source_group=group)
 
 
 @login_required
