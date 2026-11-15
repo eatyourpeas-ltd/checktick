@@ -1,9 +1,9 @@
 #!/bin/bash
-# k8s_shell — open a shell in a PRODUCTION CheckTick web pod on the Civo
-# Kubernetes cluster: the Django shell by default, or the OS command line
-# with --bash.
+# k8s_shell — open a shell in a CheckTick web pod on the Civo Kubernetes
+# cluster (production by default, staging with --staging): the Django shell
+# by default, or the OS command line with --bash.
 #
-# NOTE: this is a KUBERNETES (Civo production) operational script. For local
+# NOTE: this is a KUBERNETES (Civo) operational script. For local
 # development use `docker compose exec -T web python manage.py shell` instead.
 #
 # The shell inherits the pod's full environment (Vault AppRole credentials,
@@ -19,25 +19,36 @@
 #   ./s/k8s-shell -c "<python code>"     # Django one-liner, then exit
 #   ./s/k8s-shell --bash                 # interactive OS command line
 #   ./s/k8s-shell --bash -c "<cmd>"      # one bash command, then exit
+#   ./s/k8s-shell --staging [...]        # any of the above against staging
 #
-# (--bash must come first; everything after it is passed to bash.)
+# (--bash/--staging must come first; everything after --bash is passed to
+#  bash.)
 
 set -euo pipefail
 
 if [[ "${1:-}" == "--help" ]]; then
-    head -23 "$0" | tail -22
+    head -25 "$0" | tail -24
     exit 0
 fi
 
 NS=checktick
 CONTAINER=web
 MODE=django
+TARGET=production
+LABEL=checktick-web
 
-# --bash selects the OS command line; the default is the Django shell.
-if [[ "${1:-}" == "--bash" ]]; then
-    MODE=bash
+# Flags must come first: --bash selects the OS command line (the default is
+# the Django shell); --staging targets the staging deployment
+# (staging.checktick.uk) instead of production.
+while [[ "${1:-}" == "--bash" || "${1:-}" == "--staging" ]]; do
+    if [[ "$1" == "--bash" ]]; then
+        MODE=bash
+    else
+        TARGET=staging
+        LABEL=checktick-staging-web
+    fi
     shift
-fi
+done
 
 # Kubeconfig resolution: explicit KUBECONFIG wins; else the Civo kubeconfig
 # if present; else the default config.
@@ -47,12 +58,12 @@ fi
 
 # Resolve a running pod explicitly so the session target is visible
 # (`kubectl exec deploy/...` would silently pick one for us).
-POD="$(kubectl get pods -n "$NS" -l app=checktick-web \
+POD="$(kubectl get pods -n "$NS" -l "app=$LABEL" \
     --field-selector=status.phase=Running \
     -o jsonpath='{.items[0].metadata.name}' 2>/dev/null || true)"
 if [ -z "$POD" ]; then
-    echo "✗ No running checktick-web pod in namespace $NS — is the deployment up?"
-    echo "  Check: kubectl -n $NS get pods -l app=checktick-web"
+    echo "✗ No running $LABEL pod in namespace $NS — is the deployment up?"
+    echo "  Check: kubectl -n $NS get pods -l app=$LABEL"
     exit 1
 fi
 
@@ -63,13 +74,19 @@ else
 fi
 
 echo "=========================================="
-echo "  Shell (Kubernetes/Civo production)"
+echo "  Shell (Kubernetes/Civo $TARGET)"
 echo "=========================================="
 echo "Cluster context : $(kubectl config current-context)"
 echo "Pod             : $NS/$POD"
 echo "Mode            : $MODE_DESC"
-echo "Reminder        : production data — never log patient data or"
-echo "                  decrypted survey objects."
+if [ "$TARGET" = staging ]; then
+    echo "Reminder        : staging shares prod's Vault and media PVCs —"
+    echo "                  never log patient data or decrypted survey"
+    echo "                  objects."
+else
+    echo "Reminder        : production data — never log patient data or"
+    echo "                  decrypted survey objects."
+fi
 echo ""
 
 if [ "$MODE" = bash ]; then
