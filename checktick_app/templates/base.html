@@ -91,6 +91,9 @@
             {% if user.is_authenticated %}
               <li><a href="/surveys">{% trans "Surveys" %}</a></li>
               <li><a href="{% url 'surveys:published_templates_list' %}">{% trans "Question Bank" %}</a></li>
+              {% if can_use_appraisal %}
+                <li><a href="{% url 'appraisal:caseload' %}">{% trans "Appraisals" %}</a></li>
+              {% endif %}
               {% if can_view_datasets %}
                 <li><a href="{% url 'surveys:dataset_list' %}">{% trans "Datasets" %}</a></li>
               {% endif %}
@@ -128,6 +131,9 @@
           {% if user.is_authenticated %}
             <li><a href="/surveys">{% trans "Surveys" %}</a></li>
             <li><a href="{% url 'surveys:published_templates_list' %}">{% trans "Question Bank" %}</a></li>
+            {% if can_use_appraisal %}
+              <li><a href="{% url 'appraisal:caseload' %}">{% trans "Appraisals" %}</a></li>
+            {% endif %}
             {% if can_view_datasets %}
               <li><a href="{% url 'surveys:dataset_list' %}">{% trans "Datasets" %}</a></li>
             {% endif %}

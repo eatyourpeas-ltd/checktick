@@ -101,6 +101,7 @@ A team account for groups, organisations, or institutions.
 - **User management**: Assign owners, editors, viewers, data custodians
 - **Centralized audit logs**: Track all team activity
 - **Group ownership**: Surveys can be owned by organisation
+- **Appraisal workflow**: GMC-style 360° appraisal cycles — see [Appraisal Workflow](appraisal.md)
 
 **User roles in organisations**:
 
@@ -653,6 +654,10 @@ Full API documentation available at:
   repeated measures with compliance tracking). See
   [Survey Layouts](survey-layouts.md), the [Delphi guide](delphi.md), and
   the [Diary / EMA guide](diary-ema.md).
+- **Appraisal Workflow**: Run GMC-style 360° appraisal cycles —
+  patient, colleague and self-assessment feedback in one encrypted
+  survey per appraisee, with Responsible Officer governance and
+  appraiser-released reports. See [Appraisal Workflow](appraisal.md).
 - **Prefilled Data**: Import datasets for prepopulated surveys
 - **Multi-language**: Create surveys in multiple languages
 - **Email Notifications**: Get notified of new responses

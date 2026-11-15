@@ -106,6 +106,11 @@ def revert_grandfathering(apps, schema_editor):
 class Migration(migrations.Migration):
     dependencies = [
         ("surveys", "0054_survey_audience_confirmed_and_more"),
+        # The data migration reads core.UserOIDC; declare the dependency
+        # so the graph order guarantees the model exists in the migration
+        # state regardless of app ordering (exposed when the appraisal
+        # app changed the topological order).
+        ("core", "0006_useroidc"),
     ]
 
     operations = [

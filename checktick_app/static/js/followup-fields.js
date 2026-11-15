@@ -31,9 +31,11 @@
             );
             allFollowups.forEach((field) => {
               field.classList.add("hidden");
-              // Clear the input value when hiding
-              const input = field.querySelector("input");
-              if (input) input.value = "";
+              // Clear the input value when hiding (radios: uncheck all)
+              field.querySelectorAll("input").forEach((input) => {
+                if (input.type === "radio") input.checked = false;
+                else input.value = "";
+              });
             });
 
             // Show the selected option's follow-up field if it exists
@@ -55,9 +57,11 @@
             followupField.classList.remove("hidden");
           } else {
             followupField.classList.add("hidden");
-            // Clear the input value when hiding
-            const input = followupField.querySelector("input");
-            if (input) input.value = "";
+            // Clear the input value when hiding (radios: uncheck all)
+            followupField.querySelectorAll("input").forEach((input) => {
+              if (input.type === "radio") input.checked = false;
+              else input.value = "";
+            });
           }
         });
       }
@@ -84,9 +88,11 @@
         );
         allFollowups.forEach((field) => {
           field.classList.add("hidden");
-          // Clear the input value when hiding
-          const input = field.querySelector("input");
-          if (input) input.value = "";
+          // Clear the input value when hiding (radios: uncheck all)
+          field.querySelectorAll("input").forEach((input) => {
+            if (input.type === "radio") input.checked = false;
+            else input.value = "";
+          });
         });
 
         // Show the selected option's follow-up field if it exists
@@ -154,8 +160,10 @@
           .querySelectorAll(`[data-followup-field^="${qid}_"]`)
           .forEach((field) => {
             field.classList.add("hidden");
-            const input = field.querySelector("input");
-            if (input) input.value = "";
+            field.querySelectorAll("input").forEach((input) => {
+              if (input.type === "radio") input.checked = false;
+              else input.value = "";
+            });
           });
       };
       groupSelect.addEventListener("change", function () {
@@ -194,8 +202,10 @@
           .querySelectorAll(`[data-followup-field^="${qid}_"]`)
           .forEach((field) => {
             field.classList.add("hidden");
-            const input = field.querySelector("input");
-            if (input) input.value = "";
+            field.querySelectorAll("input").forEach((input) => {
+              if (input.type === "radio") input.checked = false;
+              else input.value = "";
+            });
           });
       };
       root.querySelectorAll("[data-group-trigger]").forEach((trigger) => {

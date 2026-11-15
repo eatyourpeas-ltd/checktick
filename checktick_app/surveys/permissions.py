@@ -26,10 +26,51 @@ def can_view_survey(user, survey: Survey) -> bool:
         return True
     if survey.organization_id and is_org_admin(user, survey.organization):
         return True
-    # creators and viewers of the specific survey can view it
-    if SurveyMembership.objects.filter(user=user, survey=survey).exists():
+    # creators and viewers of the specific survey can view it; a
+    # distributor-only membership does not grant results access — the
+    # distributor role can generate tokens and see completion counts only
+    # (docs/appraisal-implementation-plan.md §3.1)
+    if (
+        SurveyMembership.objects.filter(user=user, survey=survey)
+        .exclude(role=SurveyMembership.Role.DISTRIBUTOR)
+        .exists()
+    ):
         return True
     return False
+
+
+def can_distribute_survey(user, survey: Survey) -> bool:
+    """Distribution access: generate token batches / QR codes and see
+    completion counts — but never response content.
+
+    Granted to the survey owner, org owner/admin, and survey-level
+    creator/editor/distributor memberships. Viewers cannot distribute.
+    """
+    if not user.is_authenticated:
+        return False
+    if survey.owner_id == getattr(user, "id", None):
+        return True
+    # Organization owner can distribute all surveys in their organization
+    if survey.organization_id and survey.organization.owner_id == getattr(
+        user, "id", None
+    ):
+        return True
+    if survey.organization_id and is_org_admin(user, survey.organization):
+        return True
+    return SurveyMembership.objects.filter(
+        user=user,
+        survey=survey,
+        role__in=[
+            SurveyMembership.Role.CREATOR,
+            SurveyMembership.Role.EDITOR,
+            SurveyMembership.Role.DISTRIBUTOR,
+        ],
+    ).exists()
+
+
+def require_can_distribute(user, survey: Survey) -> None:
+    if not can_distribute_survey(user, survey):
+        raise PermissionDenied("You do not have permission to distribute this survey.")
 
 
 def can_edit_survey(user, survey: Survey) -> bool:
@@ -536,7 +577,14 @@ def require_can_hard_delete_survey(user, survey: Survey) -> None:
 
 
 def can_publish_question_group(user, group, level: str, survey=None) -> bool:
-    """Check if user can publish a question group at given level."""
+    """Check if user can publish a question group at given level.
+
+    Global publication is curated, not self-serve: global templates ship
+    with the product from ``docs/question-group-templates/`` and are
+    managed by CheckTick administrators via the API (which keeps its own
+    superuser guard as defence in depth). The web UI only ever offers
+    organisation-level publication.
+    """
     from .models import OrganizationMembership
 
     if not user.is_authenticated:
@@ -547,14 +595,10 @@ def can_publish_question_group(user, group, level: str, survey=None) -> bool:
         return False
 
     if level == "global":
-        # Anyone (except org VIEWERs) can publish globally
-        # Check if user is an org VIEWER
-        if OrganizationMembership.objects.filter(
-            user=user, role=OrganizationMembership.Role.VIEWER
-        ).exists():
-            # If they're a VIEWER in any org, they can't publish
-            return False
-        return True
+        # Global templates are curated by CheckTick. Users submit
+        # instruments for review instead of publishing globally —
+        # see docs/question-group-template-library.md.
+        return False
 
     if level == "organization":
         # Must have an organization associated with the survey

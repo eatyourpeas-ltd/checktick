@@ -117,12 +117,27 @@ When you import an attributed template:
 
 ## Publishing your own templates
 
-Organisation admins can publish sections from their surveys as templates. Published templates can be:
+Organisation admins and creators can publish sections from their surveys as templates at **organisation level** — visible only to your organisation members. Publishing requires the survey to belong to an organisation; on personal surveys the publish action is hidden with guidance to link the survey to an organisation.
 
-- **Organisation-level**: Visible only to your organisation members
-- **Global**: Visible to all CheckTick users
+**Global templates are curated, not self-published.** They are added by CheckTick and ship with the product. To propose an instrument for the global Question Bank, see [Submitting an instrument for review](#submitting-an-instrument-for-review) below.
 
 For detailed instructions on publishing templates, including attribution requirements and copyright protection, see [Publishing Question Bank Templates](/docs/publish-question-groups/).
+
+## Submitting an instrument for review
+
+The Question Bank is curated. If you would like an instrument available to all CheckTick users, submit it for review.
+
+**Who can submit:** anyone — but global publication is only possible where copyright already permits it (the instrument is openly licensed or out of copyright), or where you are the rights holder and happy to share it without restriction. Third-party instruments without permission are rejected at review.
+
+**How to submit (primary — email):** send the instrument to [hello@checktick.com](mailto:hello@checktick.com?subject=Question%20Bank%20instrument%20submission) with the subject "Question Bank instrument submission". Attach the instrument as a markdown file using the [library front-matter format](/docs/question-group-templates-index/#template-file-format) (title, description, tags, and attribution including authors, citation, DOI/PMID and licence) plus a one-line rights declaration:
+
+> "I confirm I hold the rights to share this instrument, it is already openly licensed or out of copyright, and I am happy for CheckTick to publish it in the Question Bank without restriction."
+
+Email keeps the submission private during review — important when you are unsure of your licence position. Do not include patient data or personal information in your submission.
+
+**Alternative — GitHub issue:** [open a template request issue](https://github.com/eatyourpeas-ltd/checktick/issues/new?template=question_group_template_request.yml) (labelled `question-group-template`) with the complete markdown. Note that an issue posts the instrument publicly, so it is only appropriate when the rights position is already clear.
+
+**Review checklist:** CheckTick verifies rights/licence, attribution completeness, clinical appropriateness of the items, outline-grammar validity (the file imports cleanly, including `CATEGORIES` blocks where used), and language/accessibility. Accepted files ship in the next release and appear in the library once synced on deployment. If a submission is rejected, you are told why (rights, quality, or scope) — no silent drops.
 
 ## Specialist templates vs. section templates
 

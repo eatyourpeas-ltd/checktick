@@ -112,6 +112,12 @@ Teams provide shared billing and collaboration for groups of 5-50 users.
 - Advanced governance features
 - Priority support
 
+### Appraisal (Organisation tier)
+
+The appraisal workflow (`/appraisal/`) is included with the Organisation tier. It supports structured appraisal cycles, with one survey per appraisee per cycle, appraiser caseloads, and Responsible Officer oversight.
+
+**Seats** are clinicians only: the Responsible Officer, appraisers, and appraisees each use one seat. Patients and colleague raters are respondents, not users, so they consume no seats.
+
 **Enterprise**
 
 - Custom pricing (contact sales)
@@ -486,6 +492,7 @@ annual billing cycle set by the platform admin:
 - **Annual billing**: When the org's billing cycle is set to annual, the annual discount (`ANNUAL_DISCOUNT_PERCENT`, default 20%) is applied to the monthly rate × 12. The platform admin sets this per-organisation in the org form.
 - **Minimum commitment**: Contact sales
 - **Invoice billing**: Available for organisations
+- **Appraisal seats**: Appraisal seats are clinicians only (Responsible Officer, appraisers, and appraisees). Patients and colleague raters are respondents and do not use a seat. See [Appraisal (Organisation tier)](#appraisal-organisation-tier).
 
 ### Switching Billing Cycle
 

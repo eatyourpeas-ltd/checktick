@@ -3026,6 +3026,11 @@ class SurveyMembership(models.Model):
     class Role(models.TextChoices):
         CREATOR = "creator", "Creator"
         EDITOR = "editor", "Editor"
+        # One notch below EDITOR: can generate token batches / QR codes and
+        # see completion counts, but never edit the survey or read results.
+        # Survey-type-agnostic (appraisal is one consumer — see
+        # docs/appraisal-implementation-plan.md §3.1).
+        DISTRIBUTOR = "distributor", "Distributor"
         VIEWER = "viewer", "Viewer"
 
     survey = models.ForeignKey(
@@ -4977,6 +4982,17 @@ class RespondentCategory(models.Model):
         help_text=(
             "For profile resolution: the UserProfile/Org field key to read "
             "the value from."
+        ),
+    )
+    default_value = models.CharField(
+        max_length=200,
+        blank=True,
+        help_text=(
+            "Fallback value for {{dim}} substitution in content blocks when "
+            "the dimension is unresolved for this respondent — e.g. the "
+            "appraisal subject's name, so anonymous patients (no token) "
+            "still see who the feedback is about. Token-borne values always "
+            "win over the default."
         ),
     )
     order = models.PositiveIntegerField(

@@ -170,10 +170,12 @@
           {% else %}
           {# Issue #354: token-level override for unused invitations — the #}
           {# same per-dimension fields as the batch form, pre-filled with #}
-          {# the token's current values. #}
+          {# the token's current values. Edit-level only: distributors see #}
+          {# the read-only badges. #}
           {% for dim, val in t.category_values.items %}
           <span class="badge badge-outline badge-xs">{{ dim }}: {{ val }}</span>
           {% endfor %}
+          {% if can_edit %}
           <details class="mt-1">
             <summary class="btn btn-ghost btn-xs px-2 list-none cursor-pointer select-none">{% trans "Edit" %}</summary>
             <form method="post" action="{% url 'surveys:token_categories_edit' slug=survey.slug token_id=t.id %}" class="mt-1 flex flex-wrap items-end gap-1">
@@ -198,6 +200,7 @@
               <button type="submit" class="btn btn-primary btn-xs">{% trans "Save" %}</button>
             </form>
           </details>
+          {% endif %}
           {% endif %}
         </td>
         {% endif %}

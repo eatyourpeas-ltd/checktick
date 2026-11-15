@@ -180,6 +180,15 @@ For team surveys, recovery is instant. For individual user surveys within your o
 
 **Note**: Organisation key escrow and platform/Vault recovery now escrow and unwrap the survey **private key** (the same mechanisms and escrow fields as before). Organisation admins recovering a survey key can decrypt responses as before.
 
+### Appraisal Surveys and the Organisation Master Key
+
+Appraisal surveys (Organisation tier) are wrapped with the organisation master key by default. The appraiser who creates an appraisal does not hold the only key path; the organisation does:
+
+- **Responsible Officer**: the organisation owner or an organisation admin acts as the Responsible Officer for appraisals. They can open any appraisal survey through the organisation master key.
+- **Key generation**: if your organisation does not yet have a master key when the first appraisal is created, one is generated automatically, and the event is recorded in the audit log. You do not need to set one up in advance.
+- **Appraiser turnover**: when an appraiser leaves, the Responsible Officer recovers the appraisal surveys through the organisation master key and re-wraps them. The responses stay with the appraisal, and nothing depends on the departing appraiser's credentials or personal key.
+- **Appraisees**: appraisees hold the Distributor role to share their feedback link. They have no key path and cannot see results.
+
 ### Recovery Dashboard
 
 The recovery dashboard shows:

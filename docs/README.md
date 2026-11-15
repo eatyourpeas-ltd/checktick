@@ -8,7 +8,7 @@ For clinicians doing surveys or questionnaires that don't involve sensitive pati
 
 CheckTick meets all these needs. It allows users to build their own questions from a range of question types, including a range of prebuilt sections. For example, if you are surveying doctors and you want to know where they work, you can use the Professional Details question type - fields prepopulated with all the hosital trusts in the UK. Need an input that validates an NHS Number or postcode? You can use the custom Patient Details section. CheckTick supports hundreds of NHS Dictionary datasets besides, all with standard names and values; from standardised lists of blood groups, to ethnicities to medical specialities. Users can publish their own lists to share with others, or Organisation users can build their own lists specific to where they work.
 
-Suppose you are doing a research project which includes asking an already published and validated questionnaire? Do you have to enter all those questions and answer options again? With CheckTick some of these are already hosted - any validated, published group of questions (subject to copyright), for example the Patient Health Questionnaire (PHQ-9), can be dropped into a survey. No need to enter all those questions in again. And you can publish your own for others to use. If you have a custom intussusception score you want others to use, post it for them to use. Browse the library to see what is there, and contribute your own to save others' time and to make sure your questionnaire is used.
+Suppose you are doing a research project which includes asking an already published and validated questionnaire? Do you have to enter all those questions and answer options again? With CheckTick some of these are already hosted - any validated, published group of questions (subject to copyright), for example the Patient Health Questionnaire (PHQ-9), can be dropped into a survey. No need to enter all those questions in again. And organisation users can publish their own questionnaires to their organisation's Question Bank for colleagues to use. To get an instrument into the shared library for all users, submit it for review by emailing hello@checktick.com or opening a GitHub issue. Browse the library to see what is there, and contribute your own to save others' time and to make sure your questionnaire is used.
 
 There are a range of different ways to create surveys. Most users are familiar with builders where questions types are dragged onto a canvas. CheckTick offers this together with branching where users can change the questions offered based on previous answers. But CheckTick also has a Text Editor - users can type the questions in as a list, or paste them in from somewhere else to create a survey. Or, use the AI Assistant which can suggest questions and generate the survey automatically. If you already have the survey as a Word document, the AI can convert it into a survey for you to review.
 
@@ -29,6 +29,17 @@ If your workflow prefers API access - there is a full suite of endpoints for sur
 CheckTick has been designed and built for clinicians working in the NHS. The CheckTick team want to foster a community of users that that are building surveys to learn more about the the services they run and the patients they serve. The documentation is comprehensive but can always be improved. If you have any suggestions, for example features you need, or bugs you have found, or if you want to get involved in making CheckTick better, please see the guidelines on how to contribute.
 
 For NHS tips on survey creation check out this [guidance](https://nhsevaluationtoolkit.net/resources/guide-to-questionnaires-for-service-evaluation/)
+
+## Appraisal Workflow
+
+Organisation accounts can run structured clinician appraisal cycles. Each appraisee has one survey per cycle, built from the organisation's instrument, and feedback is gathered from patients, colleagues, and a self-assessment. Reports are only released once a minimum number of responses has been reached, and released reports are versioned.
+
+- [Appraisal Workflow](appraisal.md) - the full guide: what the RO and organisation get, encryption and key custody, governance (two-party rater unmasking, audit logging, role-based access), and what it means for the appraisee
+- [Surveys: the Distributor role](surveys.md#distributors-and-the-distributing-group)
+- [Publish and collect: distributor access to the tokens page](publish-and-collection.md#distributor-access-to-the-tokens-page)
+- [Reporting: appraisal reports](reporting-and-exports.md#appraisal-reports)
+- [Encryption for users: appraisal surveys and the organisation key](encryption-for-users.md#appraisal-surveys-and-the-organisation-key)
+- [Billing: appraisal on the Organisation tier](billing-and-subscriptions.md#appraisal-organisation-tier)
 
 ## Developer & Maintainer References
 

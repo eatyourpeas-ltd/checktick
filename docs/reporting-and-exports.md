@@ -139,6 +139,47 @@ The following are intentionally not in the first iteration of the Summary Report
 
 ---
 
+## Appraisal Reports
+
+Appraisal surveys (the `/appraisal/` vertical, Organisation tier) produce a structured report for each appraisee's cycle. The report is built from the same responses as the Summary Report, but it is split by rater type and released deliberately rather than shown live.
+
+### Who can see what
+
+- **Appraiser** — can release reports to the appraisee.
+- **Responsible Officer (organisation owner or admin)** — can release reports, and oversee every appraisal in the organisation via the portfolio view.
+- **Appraisee** — can view released report versions only. They cannot release reports and never see the live aggregate.
+- **Distributors** — have no access to results (see [Surveys](/docs/surveys/#distributors-and-the-distributing-group)).
+
+### Minimum-response threshold
+
+Each appraisal has a minimum response count (`min_responses`, default 5). A report cannot be released until the total number of responses reaches this threshold.
+
+### Populations and suppression
+
+Responses are grouped into populations by the `rater_role` respondent category, which is carried by the invitation token:
+
+- **Self** — the appraisee's own assessment (`rater_role = self`)
+- **Clinician** — colleague raters (`rater_role` for colleagues)
+- **Patient** — anonymous responses. Anonymous responses are patients by construction, because they have no token and so no rater role.
+
+A population with fewer responses than the threshold is **suppressed**: the report shows only its count, not its answers. The self population is never suppressed, because it always has exactly one response and is the appraisee's own view.
+
+### Comparisons
+
+Where the same question appears in more than one population, the report pairs them in a comparisons block, for example self against clinician against patient. Each option is shown as a percentage within its population, so the populations can be read side by side.
+
+### Released versions are immutable
+
+When a report is released, CheckTick stores a snapshot of the report as JSON, with a version number. Snapshots are never edited. If a report needs correcting, release a new version. Earlier versions remain available, so the appraisee and the Responsible Officer can see exactly what was released at each point.
+
+### Exception reviews
+
+An appraiser who believes a rater response needs review can raise an exception review, giving the response and a reason. The review must be co-signed by the Responsible Officer, and the appraiser who raised it cannot co-sign it. Released reports show only that an exception review took place (a count). They never show its content.
+
+The rater's identity is only disclosed after the review is approved, and only to the appraiser and the Responsible Officer. Every step is recorded in the audit log, and disclosures are logged at WARNING severity. The Responsible Officer is emailed when a review is raised (without the reason). The appraiser is emailed when a decision is made. The appraisee never sees exception reviews.
+
+---
+
 ## CSV Export
 
 Export your survey responses to CSV format for analysis in spreadsheet applications or statistical software like Excel, Power BI, or SPSS.
@@ -255,6 +296,8 @@ The dashboard (`/surveys/{slug}/dashboard/`) requires:
   - Organisation admin
   - Survey member (viewer, editor, or creator role)
 
+Distributors (the Distributor membership role) do not have dashboard access. They can see completion counts on the tokens page only.
+
 Rate limit: 100 requests per hour per user.
 
 ### Summary Report Access
@@ -319,3 +362,4 @@ See [Data Governance](/docs/data-governance/) §Participant Withdrawal and [Data
 - [Data Governance](/docs/data-governance/) - Retention, deletion, and participant withdrawal
 - [Privacy Notice](/docs/privacy-notice/) - Privacy rights for survey respondents
 - [Publish & Collect Responses](/docs/publish-and-collection/) - Publication workflow and visibility modes
+- [Surveys](/docs/surveys/) - Survey roles, including the Distributor role

@@ -1149,6 +1149,122 @@ def send_subscription_expired_email(
     )
 
 
+def send_exception_review_raised_email(ro, review) -> bool:
+    """Notify a Responsible Officer that an exception review awaits their
+    co-signature (§9, D10).
+
+    Privacy: the email carries the workflow facts only — who raised it,
+    which appraisee/cycle, which response number — never the reason or
+    any response content. The RO reads the reason after logging in, on
+    the exceptions page.
+    """
+    logger.info(
+        f"Sending exception review notification to {ro.email} " f"(review: {review.pk})"
+    )
+
+    branding = get_platform_branding()
+    site_url = getattr(settings, "SITE_URL", "http://localhost:8000").rstrip("/")
+    rel = review.relationship
+    url = f"{site_url}/appraisal/relationships/{rel.pk}/exceptions/"
+    appraiser_name = review.raised_by.get_full_name() or review.raised_by.username
+    appraisee_name = rel.appraisee.get_full_name() or rel.appraisee.username
+
+    subject = f"{branding['title']}: Exception review needs your co-signature"
+    markdown_lines = [
+        "# Exception review needs your co-signature",
+        "",
+        f"Hi {ro.first_name or ro.username},",
+        "",
+        f"**{appraiser_name}** has raised an exception review for the "
+        f"appraisal of **{appraisee_name}** ({rel.cycle_year}) and needs "
+        "you to co-sign it before any rater can be identified.",
+        "",
+        f"Response: #{review.response_id}.",
+        "",
+        "Two-party control: the appraiser cannot unmask a rater alone — "
+        "your co-signature is required before the linkage is disclosed.",
+        "",
+        f"[Review the exception request]({url})",
+        "",
+        "The reason for the request is visible after you sign in — it is "
+        "deliberately not included in this email.",
+        "",
+        "Best regards,",
+        f"The {branding['title']} Team",
+    ]
+
+    return send_branded_email(
+        to_email=ro.email,
+        subject=subject,
+        markdown_content="\n".join(markdown_lines),
+        branding=branding,
+        context={
+            "ro": ro,
+            "review": review,
+            "url": url,
+        },
+    )
+
+
+def send_exception_review_decided_email(review) -> bool:
+    """Notify the appraiser that the RO has co-signed (or rejected) their
+    exception review — completing the two-party loop at distance."""
+    logger.info(
+        f"Sending exception review decision email to {review.raised_by.email} "
+        f"(review: {review.pk}, status: {review.status})"
+    )
+
+    branding = get_platform_branding()
+    site_url = getattr(settings, "SITE_URL", "http://localhost:8000").rstrip("/")
+    rel = review.relationship
+    url = f"{site_url}/appraisal/relationships/{rel.pk}/exceptions/"
+    appraisee_name = rel.appraisee.get_full_name() or rel.appraisee.username
+
+    if review.status == "approved":
+        subject = (
+            f"{branding['title']}: Exception review approved — "
+            "rater linkage disclosed"
+        )
+        headline = "has been **approved**"
+        tail = (
+            "The rater linkage is now visible to you and the Responsible "
+            "Officer on the exceptions page."
+        )
+    else:
+        subject = f"{branding['title']}: Exception review rejected"
+        headline = "has been **rejected**"
+        tail = "The rater linkage remains hidden."
+
+    markdown_lines = [
+        "# Exception review decision",
+        "",
+        f"Hi {review.raised_by.first_name or review.raised_by.username},",
+        "",
+        f"Your exception review for the appraisal of **{appraisee_name}"
+        f"** ({rel.cycle_year}), response #{review.response_id}, "
+        f"{headline} by "
+        f"{review.decided_by.get_full_name() or review.decided_by.username}.",
+        "",
+        tail,
+        "",
+        f"[View the exception review]({url})",
+        "",
+        "Best regards,",
+        f"The {branding['title']} Team",
+    ]
+
+    return send_branded_email(
+        to_email=review.raised_by.email,
+        subject=subject,
+        markdown_content="\n".join(markdown_lines),
+        branding=branding,
+        context={
+            "review": review,
+            "url": url,
+        },
+    )
+
+
 def send_manual_upgrade_email(user, tier: str, valid_until=None) -> bool:
     """Send notification when a platform admin manually upgrades an account.
 

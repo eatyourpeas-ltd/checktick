@@ -151,7 +151,26 @@
       </ul>
     {% endif %}
 
-    {% if not grouped_surveys.owned and not grouped_surveys.team and not grouped_surveys.organisation and not grouped_surveys.shared %}
+    {# Distributing #}
+    {# Surveys the user distributes for (tokens, QR codes, completion
+    # counts) — honest about what the role can do: no edit, no results. #}
+    {% if grouped_surveys.distributing %}
+      <h2 class="text-xl font-semibold mt-8 mb-4 flex items-center gap-2">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 3v18h18M8 16v-5m4 5V8m4 8v-3"></path>
+        </svg>
+        {% trans "Distributing" %}
+        <span class="badge badge-ghost">{{ grouped_surveys.distributing|length }}</span>
+      </h2>
+      <p class="text-sm opacity-70 -mt-2 mb-3">{% trans "You distribute these surveys — generate invitation tokens and QR codes and track completion. You cannot edit them or see responses." %}</p>
+      <ul class="not-prose w-full flex flex-col gap-3">
+        {% for item in grouped_surveys.distributing %}
+          {% include "surveys/partials/survey_list_item.html" with item=item %}
+        {% endfor %}
+      </ul>
+    {% endif %}
+
+    {% if not grouped_surveys.owned and not grouped_surveys.team and not grouped_surveys.organisation and not grouped_surveys.shared and not grouped_surveys.distributing %}
 
       {# === Empty state === #}
       <div class="not-prose mt-8 max-w-2xl">

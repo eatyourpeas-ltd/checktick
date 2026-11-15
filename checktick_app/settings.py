@@ -358,6 +358,7 @@ INSTALLED_APPS = [
     # Local apps
     "checktick_app.core",
     "checktick_app.surveys",
+    "checktick_app.appraisal",
     "checktick_app.api",
 ]
 

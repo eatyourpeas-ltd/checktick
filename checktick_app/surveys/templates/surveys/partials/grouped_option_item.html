@@ -14,7 +14,7 @@
   </label>
   {% if opt.followup_text and opt.followup_text.enabled %}
     <div class="ml-7 hidden" data-followup-field="q_{{ q.id }}_{{ item.idx }}">
-      <input type="text" class="input input-sm input-bordered w-full" name="q_{{ q.id }}_followup_{{ item.idx }}" placeholder="{{ opt.followup_text.label|default:'Please elaborate' }}" />
+      {% include 'surveys/partials/followup_input.html' with q=q suffix=item.idx fu=opt.followup_text %}
     </div>
   {% endif %}
 </div>

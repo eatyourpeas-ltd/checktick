@@ -39,6 +39,7 @@ Your documentation content starts here...
 
 - `getting-started` - Getting Started guides
 - `features` - Feature documentation
+- `appraisal` - Appraisal workflow documentation
 - `self-hosting` - Self-hosting guides
 - `configuration` - Configuration guides
 - `security` - Security documentation

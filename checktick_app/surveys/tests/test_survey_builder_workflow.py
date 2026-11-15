@@ -355,6 +355,182 @@ def test_publish_page_heading(auth_client, owner):
 
 
 # ---------------------------------------------------------------------------
+# Curated Question Bank — organisation-level publishing only
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_publish_permission_global_is_curated(owner):
+    """Global publication is curated: even the group owner cannot publish
+    globally through the web permission layer (admin-only via the API)."""
+    from checktick_app.surveys.permissions import can_publish_question_group
+
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Curated Perm Survey",
+        slug="curated-perm-survey",
+    )
+    group = create_default_section(survey, owner)
+    assert not can_publish_question_group(owner, group, "global")
+    assert not can_publish_question_group(owner, group, "global", survey=survey)
+
+
+@pytest.mark.django_db
+def test_publish_permission_org_level(owner):
+    """Organisation-level publication requires an org-linked survey and
+    ADMIN/CREATOR membership; personal surveys cannot publish at all."""
+    from checktick_app.surveys.models import Organization, OrganizationMembership
+    from checktick_app.surveys.permissions import can_publish_question_group
+
+    org = Organization.objects.create(name="Pub Org", owner=owner)
+    OrganizationMembership.objects.create(
+        organization=org, user=owner, role=OrganizationMembership.Role.ADMIN
+    )
+    org_survey = Survey.objects.create(
+        owner=owner,
+        organization=org,
+        name="Org Survey",
+        slug="pub-org-survey",
+    )
+    group = create_default_section(org_survey, owner)
+    assert can_publish_question_group(owner, group, "organization", survey=org_survey)
+
+    personal = Survey.objects.create(
+        owner=owner,
+        name="Personal Survey",
+        slug="pub-personal-survey",
+    )
+    pgroup = create_default_section(personal, owner)
+    assert not can_publish_question_group(
+        owner, pgroup, "organization", survey=personal
+    )
+
+
+@pytest.mark.django_db
+def test_publish_page_non_org_survey_shows_guidance(auth_client, owner):
+    """Non-org surveys show guidance to link to an organisation instead of
+    the publish form (Q6), plus the curated-model signposting."""
+    survey = Survey.objects.create(
+        owner=owner,
+        name="Guidance Survey",
+        slug="guidance-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="What is your name?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(
+        reverse(
+            "surveys:question_group_publish",
+            kwargs={"slug": survey.slug, "gid": group.id},
+        )
+    )
+    assert resp.status_code == 200
+    html = resp.content.decode()
+    assert "Link this survey to an organisation to publish templates" in html
+    assert "Publication Level" not in html, "no publish form should be rendered"
+    assert "Submit an instrument" in html, "curated-model signposting should be present"
+
+
+@pytest.mark.django_db
+def test_publish_page_org_survey_offers_org_level_only(auth_client, owner):
+    """Org-linked surveys offer organisation-level publication only — the
+    global option is removed (D13) and the curated note is shown."""
+    from checktick_app.surveys.models import Organization, OrganizationMembership
+
+    org = Organization.objects.create(name="Signpost Org", owner=owner)
+    OrganizationMembership.objects.create(
+        organization=org, user=owner, role=OrganizationMembership.Role.ADMIN
+    )
+    survey = Survey.objects.create(
+        owner=owner,
+        organization=org,
+        name="Signpost Survey",
+        slug="signpost-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="What is your name?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.get(
+        reverse(
+            "surveys:question_group_publish",
+            kwargs={"slug": survey.slug, "gid": group.id},
+        )
+    )
+    assert resp.status_code == 200
+    html = resp.content.decode()
+    assert "Organisation (Signpost Org)" in html
+    assert (
+        "Global (all users)" not in html
+    ), "the global publication option must not be offered to users"
+    assert "Submit an instrument" in html
+
+
+@pytest.mark.django_db
+def test_publish_post_global_level_rejected(auth_client, owner):
+    """POSTing global publication_level is rejected even on an org survey."""
+    from checktick_app.surveys.models import Organization, OrganizationMembership
+
+    org = Organization.objects.create(name="Reject Org", owner=owner)
+    OrganizationMembership.objects.create(
+        organization=org, user=owner, role=OrganizationMembership.Role.ADMIN
+    )
+    survey = Survey.objects.create(
+        owner=owner,
+        organization=org,
+        name="Reject Survey",
+        slug="reject-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group = create_default_section(survey, owner)
+    SurveyQuestion.objects.create(
+        survey=survey,
+        group=group,
+        text="What is your name?",
+        type=SurveyQuestion.Types.TEXT,
+    )
+
+    resp = auth_client.post(
+        reverse(
+            "surveys:question_group_publish",
+            kwargs={"slug": survey.slug, "gid": group.id},
+        ),
+        {
+            "publication_level": "global",
+            "name": "Sneaky Template",
+            "description": "",
+            "tags": "[]",
+            "language": "en",
+            "version": "",
+            "show_publisher_credit": "on",
+            "citation": "",
+            "pmid": "",
+            "doi": "",
+            "license": "",
+        },
+    )
+    assert resp.status_code == 200
+    assert not QuestionGroup.objects.filter(name="Sneaky Template").exists()
+    from checktick_app.surveys.models import PublishedQuestionGroup
+
+    assert not PublishedQuestionGroup.objects.filter(name="Sneaky Template").exists()
+
+
+# ---------------------------------------------------------------------------
 # Commit 5 — Rewrite the Groups page empty state
 # ---------------------------------------------------------------------------
 
@@ -451,10 +627,43 @@ def test_groups_page_no_delete_button(auth_client, owner):
     assert (
         delete_url.encode() not in resp.content
     ), "The Organise page should not have a per-row delete form (it's builder-only now)."
-    # But the publish-to-bank toolbar button should still be there.
+    # The publish-to-bank toolbar button is hidden on non-org surveys
+    # (publishing is organisation-level only); the disabled guidance
+    # button is shown instead.
+    assert (
+        b"publish-to-bank-btn" not in resp.content
+    ), "Non-org surveys should not have an active Publish to Question Bank button."
+    assert (
+        b"Link this survey to an organisation to publish templates" in resp.content
+    ), "Non-org surveys should show guidance instead."
+
+
+@pytest.mark.django_db
+def test_groups_page_org_survey_has_publish_button(auth_client, owner):
+    """Org-linked surveys keep the active Publish to Question Bank button."""
+    from checktick_app.surveys.models import Organization, OrganizationMembership
+
+    org = Organization.objects.create(name="Toolbar Org", owner=owner)
+    OrganizationMembership.objects.create(
+        organization=org, user=owner, role=OrganizationMembership.Role.ADMIN
+    )
+    survey = Survey.objects.create(
+        owner=owner,
+        organization=org,
+        name="Toolbar Survey",
+        slug="toolbar-survey",
+        status=Survey.Status.DRAFT,
+        visibility=Survey.Visibility.AUTHENTICATED,
+    )
+    group1 = QuestionGroup.objects.create(name="Section 1", owner=owner)
+    group2 = QuestionGroup.objects.create(name="Section 2", owner=owner)
+    survey.question_groups.add(group1, group2)
+
+    resp = auth_client.get(reverse("surveys:groups", kwargs={"slug": survey.slug}))
+    assert resp.status_code == 200
     assert (
         b"publish-to-bank-btn" in resp.content
-    ), "The Organise page should still have a Publish to Question Bank button."
+    ), "Org surveys should still have a Publish to Question Bank button."
 
 
 @pytest.mark.django_db

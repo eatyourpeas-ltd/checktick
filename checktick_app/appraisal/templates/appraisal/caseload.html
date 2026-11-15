@@ -1,0 +1,73 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{% trans "My caseload" %} - CheckTick{% endblock %}
+{% block content %}
+<div class="max-w-5xl mx-auto">
+  <h1 class="text-2xl font-semibold mb-2">{% trans "My caseload" %}</h1>
+  <p class="text-sm opacity-70 mb-6">{% trans "Appraisals you run as the responsible appraiser. You can read results and release reports; your appraisees distribute the surveys and see completion counts only." %}</p>
+
+  <div class="flex gap-2 mb-6">
+    <a href="{% url 'appraisal:relationship_create' %}" class="btn btn-primary btn-sm">
+      {% trans "New appraisal" %}
+    </a>
+    <a href="{% url 'appraisal:portfolio' %}" class="btn btn-outline btn-sm">
+      {% trans "RO portfolio" %}
+    </a>
+  </div>
+
+  {% if relationships %}
+  <div class="overflow-x-auto">
+    <table class="table">
+      <thead>
+        <tr>
+          <th>{% trans "Appraisee" %}</th>
+          <th>{% trans "Cycle" %}</th>
+          <th>{% trans "Instrument" %}</th>
+          <th>{% trans "Responses" %}</th>
+          <th>{% trans "Status" %}</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody>
+        {% for rel in relationships %}
+        <tr>
+          <td>{{ rel.appraisee.get_full_name|default:rel.appraisee.username }}</td>
+          <td>{{ rel.cycle_year }}</td>
+          <td>{{ rel.instrument.name }}</td>
+          <td>{{ rel.response_count }}</td>
+          <td>
+            {% if rel.status == 'active' %}
+              <span class="badge badge-success badge-sm">{% trans "Active" %}</span>
+            {% else %}
+              <span class="badge badge-ghost badge-sm">{% trans "Closed" %}</span>
+            {% endif %}
+          </td>
+          <td>
+            <a href="{% url 'surveys:dashboard' slug=rel.survey.slug %}" class="btn btn-xs">
+              {% trans "Open survey" %}
+            </a>
+            <a href="{% url 'appraisal:report_view' pk=rel.pk %}" class="btn btn-ghost btn-xs">
+              {% trans "Report" %}
+            </a>
+            <a href="{% url 'appraisal:exception_reviews' pk=rel.pk %}" class="btn btn-ghost btn-xs">
+              {% trans "Exceptions" %}
+              {% if rel.pending_exceptions %}
+                <span class="badge badge-warning badge-sm">{{ rel.pending_exceptions }}</span>
+              {% endif %}
+            </a>
+            <a href="{% url 'surveys:tokens' slug=rel.survey.slug %}" class="btn btn-ghost btn-xs">
+              {% trans "Tokens" %}
+            </a>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  </div>
+  {% else %}
+  <div class="alert alert-info">
+    <span>{% trans "No appraisals yet. Create one for an appraisee from your organisation." %}</span>
+  </div>
+  {% endif %}
+</div>
+{% endblock %}

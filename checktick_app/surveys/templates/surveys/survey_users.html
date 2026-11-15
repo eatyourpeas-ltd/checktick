@@ -103,6 +103,7 @@
     <select name="role" class="select select-bordered" {% if tier_features and not tier_features.can_add_editors %}disabled{% endif %}>
       <option value="creator">{% trans "Creator" %}</option>
       <option value="editor">{% trans "Editor" %}</option>
+      <option value="distributor">{% trans "Distributor" %}</option>
       <option value="viewer" {% if tier_features and not tier_features.can_add_viewers %}disabled{% endif %}>{% trans "Viewer" %}</option>
     </select>
   </label>

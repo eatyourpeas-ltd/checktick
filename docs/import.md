@@ -299,11 +299,13 @@ card with its rows listed inline; rows cannot be branching targets (jumping
 
 ## Follow-up questions
 
-Follow-up text inputs allow you to conditionally show additional text fields based on respondents' answers. This is useful when you need more detail for specific options (e.g., "If you selected 'Other', please explain").
+Follow-up inputs allow you to conditionally show additional fields based on respondents' answers. This is useful when you need more detail for specific options (e.g., "If you selected 'Other', please explain").
+
+A follow-up is either a **text box** (the default) or a **Yes/No question** — for example the GMC 360 professional-role question asks "If you are a doctor, are you in a training grade?" when "Doctor" is selected. Follow-ups can also be **required**: the participant must answer them when the option is selected, or submission is refused.
 
 ### Compatible question types
 
-Follow-up text inputs work with:
+Follow-up inputs work with:
 
 - Multiple choice — single (`mc_single`)
 - Multiple choice — multiple (`mc_multi`)
@@ -313,7 +315,7 @@ Follow-up text inputs work with:
 
 ### Configuration methods
 
-You can add follow-up text inputs in four ways:
+You can add follow-up inputs in four ways:
 
 1. **Outline** (this document) - Use the `+` syntax shown above for a follow-up on a specific option, or a `followup: <label>` line for a single follow-up box after all options (`mc_single`, `mc_multi`, `dropdown`)
 2. **Visual builder** - Check "Enable follow-up text" for each option in the question editor, or the question-level "Follow-up text" toggle for dataset-backed dropdowns
@@ -321,13 +323,39 @@ You can add follow-up text inputs in four ways:
 
 Both outline forms round-trip: the exported outline emits `+` lines for per-option follow-ups and a `followup:` line for question-level follow-ups.
 
+### Typed and required follow-ups (outline markers)
+
+Append a parenthesised marker to the `+` line to configure the follow-up. The marker is a comma-separated list; omit it for a plain optional text box (the default):
+
+- `(yesno)` — the follow-up renders as a **Yes/No question** instead of a text box
+- `(required)` — the participant **must** answer the follow-up when the option is selected
+- `(yesno, required)` — both
+
+```markdown
+## Your professional role (please tick only one box):* {professional-role}
+(mc_single)
+- Doctor
+  + If you are a doctor, are you in a training grade? (yesno, required)
+- Registered Nurse
+- Other
+  + Please specify
+```
+
+Notes:
+
+- The marker is only recognised when every comma-separated token is `yesno`, `text`, or `required` — a label that genuinely ends with bracketed text is preserved verbatim.
+- Required follow-ups are enforced on submission: if the option is selected and the follow-up is left blank, the participant sees an error naming the question and the option. Draft saves are not blocked.
+- The exported outline emits the same markers (`+ If you are a doctor, are you in a training grade? (yesno, required)`), so export → import round-trips.
+- The visual builder exposes the same controls: each follow-up row has a type selector (Text box / Yes-No question) and a Required checkbox.
+
 ### How it works for respondents
 
-When a respondent selects an option that has follow-up text enabled:
+When a respondent selects an option that has a follow-up enabled:
 
-- A text input field appears with your custom label
+- A text input field appears with your custom label — or, for `(yesno)` follow-ups, a Yes/No choice
 - The field is hidden if they select a different option
 - For multiple-choice questions with multiple selections, they see follow-up fields for each selected option that has it enabled
+- Required follow-ups show a marker and must be answered before the survey can be submitted
 
 ### Visual indicator
 
@@ -343,10 +371,14 @@ Options with follow-up text are stored as:
   "value": "Employed part-time",
   "followup_text": {
     "enabled": true,
-    "label": "Please specify your hours per week"
+    "label": "Please specify your hours per week",
+    "type": "text",
+    "required": false
   }
 }
 ```
+
+`type` is `"text"` (default) or `"yesno"`; `required` is `false` by default. Older rows without these keys behave as optional text follow-ups.
 
 For complete implementation details and examples, see [Branching Logic & Repeating Questions](/docs/branching-and-repeats/).
 

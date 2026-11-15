@@ -123,6 +123,7 @@ from .permissions import (
     can_manage_survey_users,
     require_can_change_survey_style,
     require_can_create_datasets,
+    require_can_distribute,
     require_can_edit,
     require_can_edit_dataset,
     require_can_view,
@@ -666,11 +667,19 @@ def survey_list(request: HttpRequest) -> HttpResponse:
             )
             pending_invitations.append({"token": _tok, "survey": _s, "is_live": _live})
 
-        # Auto-redirect pure participants (no owned surveys) to their first live invite.
+        # Auto-redirect pure participants (no owned surveys and no
+        # distributor memberships) to their first live invite. A
+        # distributor membership is real survey access — the appraisee
+        # distributing their appraisal survey must not be swallowed by
+        # the participant redirect (docs/appraisal-implementation-plan.md
+        # §11).
         live_invites = [pi for pi in pending_invitations if pi["is_live"]]
         if live_invites:
             owns_any = Survey.objects.filter(owner=user).exists()
-            if not owns_any:
+            distributes_any = SurveyMembership.objects.filter(
+                user=user, role=SurveyMembership.Role.DISTRIBUTOR
+            ).exists()
+            if not owns_any and not distributes_any:
                 return redirect("surveys:take", slug=live_invites[0]["survey"].slug)
 
     if not user.is_authenticated:
@@ -763,18 +772,32 @@ def survey_list(request: HttpRequest) -> HttpResponse:
         if not survey.is_original:
             continue
         if survey.id not in survey_access:  # Don't override higher access
-            can_edit = sm.role in [
-                SurveyMembership.Role.CREATOR,
-                SurveyMembership.Role.EDITOR,
-            ]
-            survey_access[survey.id] = {
-                "survey": survey,
-                "role": sm.role,
-                "source": "shared",
-                "source_name": None,
-                "can_edit": can_edit,
-                "can_manage": sm.role == SurveyMembership.Role.CREATOR,
-            }
+            if sm.role == SurveyMembership.Role.DISTRIBUTOR:
+                # Distributors get their own honest display group: they
+                # distribute (tokens, QR, completion counts) but cannot
+                # edit or read results (docs/appraisal-implementation-plan.md
+                # §11).
+                survey_access[survey.id] = {
+                    "survey": survey,
+                    "role": sm.role,
+                    "source": "distributing",
+                    "source_name": None,
+                    "can_edit": False,
+                    "can_manage": False,
+                }
+            else:
+                can_edit = sm.role in [
+                    SurveyMembership.Role.CREATOR,
+                    SurveyMembership.Role.EDITOR,
+                ]
+                survey_access[survey.id] = {
+                    "survey": survey,
+                    "role": sm.role,
+                    "source": "shared",
+                    "source_name": None,
+                    "can_edit": can_edit,
+                    "can_manage": sm.role == SurveyMembership.Role.CREATOR,
+                }
 
     # Group surveys by source for display
     grouped_surveys = {
@@ -782,6 +805,7 @@ def survey_list(request: HttpRequest) -> HttpResponse:
         "team": {},  # team_name -> [surveys]
         "organisation": {},  # org_name -> [surveys]
         "shared": [],
+        "distributing": [],
     }
 
     for access_info in survey_access.values():
@@ -827,10 +851,13 @@ def survey_list(request: HttpRequest) -> HttpResponse:
             grouped_surveys["organisation"][org_name].append(survey_data)
         elif source == "shared":
             grouped_surveys["shared"].append(survey_data)
+        elif source == "distributing":
+            grouped_surveys["distributing"].append(survey_data)
 
     # Sort within each group by survey name
     grouped_surveys["owned"].sort(key=lambda x: x["survey"].name.lower())
     grouped_surveys["shared"].sort(key=lambda x: x["survey"].name.lower())
+    grouped_surveys["distributing"].sort(key=lambda x: x["survey"].name.lower())
     for team_name in grouped_surveys["team"]:
         grouped_surveys["team"][team_name].sort(key=lambda x: x["survey"].name.lower())
     for org_name in grouped_surveys["organisation"]:
@@ -1993,6 +2020,84 @@ def _collect_question_answer(
     return post.getlist(f"q_{q.id}") if is_multi else post.get(f"q_{q.id}")
 
 
+def _option_followup_requirements(q: SurveyQuestion) -> list[dict[str, Any]]:
+    """Follow-up requirements for a question's options.
+
+    Returns one entry per option with an enabled follow-up:
+    ``{value, label, fu, answer_key}`` where ``value`` is the option's
+    submitted value, ``label`` its display text, ``fu`` the
+    followup_text dict, and ``answer_key`` the suffix used in the
+    stored follow-up answers (renderable option index for choice
+    questions — group-heading markers never consume an index — or the
+    yes/no/dont_know value for yes/no questions).
+    """
+    requirements: list[dict[str, Any]] = []
+    options = q.options if isinstance(q.options, list) else []
+    idx = 0
+    for opt in options:
+        if not isinstance(opt, dict):
+            continue
+        if opt.get("type") in {"option_group", "question_followup"}:
+            continue
+        fu = opt.get("followup_text")
+        if isinstance(fu, dict) and fu.get("enabled"):
+            answer_key = (
+                str(opt.get("value") or "")
+                if q.type == SurveyQuestion.Types.YESNO
+                else str(idx)
+            )
+            requirements.append(
+                {
+                    "value": opt.get("value"),
+                    "label": str(opt.get("label") or ""),
+                    "fu": fu,
+                    "answer_key": answer_key,
+                }
+            )
+        idx += 1
+    return requirements
+
+
+def _validate_required_followups(survey: Survey, answers: dict) -> list[str]:
+    """Validate required option follow-ups on final submission.
+
+    A follow-up marked required must be answered whenever its option
+    was selected — the follow-up is only shown, and only enforced, when
+    the parent option is chosen. Returns human-readable error messages.
+    """
+    errors: list[str] = []
+    for q in survey.questions.all():
+        if q.type not in {
+            SurveyQuestion.Types.MULTIPLE_CHOICE_SINGLE,
+            SurveyQuestion.Types.MULTIPLE_CHOICE_MULTI,
+            SurveyQuestion.Types.DROPDOWN,
+            SurveyQuestion.Types.YESNO,
+        }:
+            continue
+        requirements = _option_followup_requirements(q)
+        if not any(req["fu"].get("required") for req in requirements):
+            continue
+        followup_answers = answers.get(f"{q.id}_followup") or {}
+        if not isinstance(followup_answers, dict):
+            continue
+        selected = answers.get(str(q.id))
+        if q.type == SurveyQuestion.Types.MULTIPLE_CHOICE_MULTI:
+            selected_values = selected if isinstance(selected, list) else []
+        else:
+            selected_values = [selected] if selected else []
+        for req in requirements:
+            if not req["fu"].get("required"):
+                continue
+            if req["value"] not in selected_values:
+                continue
+            if followup_answers.get(req["answer_key"]):
+                continue
+            errors.append(
+                f"'{q.text}': the follow-up for '{req['label']}' is required."
+            )
+    return errors
+
+
 def _collect_question_followups(q: SurveyQuestion, post: QueryDict) -> dict[str, str]:
     """Collect follow-up text inputs for a question from POST data.
 
@@ -2192,6 +2297,7 @@ def _substitute_category_placeholders(
     known_dims: set[str],
     *,
     escape_values: bool = False,
+    dim_defaults: dict[str, str] | None = None,
 ) -> str:
     """Substitute ``{{<dimension>}}`` placeholders in content block text.
 
@@ -2204,10 +2310,12 @@ def _substitute_category_placeholders(
       typo like ``{{subjekt}}`` renders visibly and the author catches it
       in preview — including when the placeholder carries a ``|default:``
       segment (the default must not mask the typo).
-    - Known but unresolved dimension → the placeholder's optional
-      ``{{dim|default:<text>}}`` fallback when present (issue #351), else
-      an empty string (same semantics as the visibility rules: unresolved
-      = not shown). A resolved value always wins over the default.
+    - Known but unresolved dimension → the dimension's ``default_value``
+      (RespondentCategory.default_value — e.g. the appraisal subject's
+      name for anonymous patients), then the placeholder's optional
+      ``{{dim|default:<text>}}`` fallback (issue #351), else an empty
+      string (same semantics as the visibility rules: unresolved = not
+      shown). A resolved value always wins over both defaults.
     - ``escape_values=True`` inserts ``escape(value)`` — for substitution
       into already-rendered, sanitised HTML (the ``body_md`` path). The
       plain-text fields (heading / subtitle / link labels / consent
@@ -2218,6 +2326,8 @@ def _substitute_category_placeholders(
       on the ``body_md`` path — markdown has already escaped and
       sanitised it with the surrounding body, so it is never re-escaped
       (that would double-encode entities like ``&`` → ``&amp;amp;``).
+      ``dim_defaults`` is author-configured on the Organise page and is
+      substituted like the ``|default:`` text (as typed / as-rendered).
     """
     if not text or category_values is None:
         return text or ""
@@ -2229,14 +2339,11 @@ def _substitute_category_placeholders(
         value = str(category_values.get(dim, ""))
         if value:
             return escape(value) if escape_values else value
-        # Known but unresolved: fall back to the placeholder's optional
-        # ``|default:`` text (issue #351), else render empty (unresolved =
-        # not shown). The default is authored source text, inserted as
-        # typed / as-rendered (see docstring) — it cannot form tags or
-        # attributes: by the time substitution sees it, any ``<`` it
-        # carries is either an allowlisted sanitised tag or an ``&lt;``
-        # entity, and quotes in text content are inert.
-        return match.group(2) or ""
+        # Known but unresolved: the dimension's configured default_value,
+        # then the placeholder's optional ``|default:`` text (issue #351),
+        # else render empty (unresolved = not shown).
+        default = (dim_defaults or {}).get(dim) or match.group(2) or ""
+        return default
 
     return _CATEGORY_PLACEHOLDER_RE.sub(_repl, text)
 
@@ -2245,6 +2352,7 @@ def _substituted_content_block_links(
     links: Any,
     category_values: dict[str, str] | None,
     known_dims: set[str],
+    dim_defaults: dict[str, str] | None = None,
 ) -> list[Any]:
     """Return ``links`` with ``{{<dimension>}}`` labels substituted (issue #352).
 
@@ -2269,6 +2377,7 @@ def _substituted_content_block_links(
                     str(link.get("label") or ""),
                     category_values,
                     known_dims,
+                    dim_defaults=dim_defaults,
                 ),
             }
         )
@@ -2349,8 +2458,10 @@ def _annotate_question_render_sequence(
     # Respondent categories: known dimension names for {{dim}} placeholder
     # substitution in content blocks (lazily populated on the first content
     # block — see docs/content-block-category-substitution-implementation-
-    # plan.md §Substitution contract).
+    # plan.md §Substitution contract). category_dim_defaults carries each
+    # dimension's configured fallback value (lazy, same pattern).
     known_category_dims: set[str] | None = None
+    category_dim_defaults: dict[str, str] | None = None
 
     for i, q in enumerate(questions, start=1):
         setattr(q, "idx", i)
@@ -2406,13 +2517,23 @@ def _annotate_question_render_sequence(
             opts = q.options if isinstance(q.options, dict) else {}
             # Known category dimensions for {{dim}} substitution (fetched
             # once; None category_values is the builder path, which never
-            # substitutes).
+            # substitutes). dim_defaults carries each dimension's
+            # configured fallback (e.g. the appraisal subject's name for
+            # anonymous patients).
             if known_category_dims is None:
                 known_category_dims = (
                     set(survey.respondent_categories.values_list("name", flat=True))
                     if category_values is not None
                     else set()
                 )
+            if category_dim_defaults is None:
+                category_dim_defaults = {
+                    c.name: c.default_value
+                    for c in survey.respondent_categories.filter(
+                        ~models.Q(default_value="")
+                    )
+                    if c.default_value
+                }
             # Delphi aggregate feedback substitution: if this content block is
             # marked as aggregate feedback (``is_delphi_feedback = True``),
             # substitute the body_md with a combined summary of all feedback
@@ -2439,6 +2560,7 @@ def _annotate_question_render_sequence(
                         opts.get("heading", "Inter-round feedback"),
                         category_values,
                         known_category_dims,
+                        dim_defaults=category_dim_defaults,
                     ),
                 )
                 setattr(
@@ -2448,13 +2570,17 @@ def _annotate_question_render_sequence(
                         opts.get("subtitle", ""),
                         category_values,
                         known_category_dims,
+                        dim_defaults=category_dim_defaults,
                     ),
                 )
                 setattr(
                     q,
                     "content_block_links",
                     _substituted_content_block_links(
-                        opts.get("links", []), category_values, known_category_dims
+                        opts.get("links", []),
+                        category_values,
+                        known_category_dims,
+                        dim_defaults=category_dim_defaults,
                     ),
                 )
                 setattr(q, "content_block_image", None)
@@ -2472,6 +2598,7 @@ def _annotate_question_render_sequence(
                         category_values,
                         known_category_dims,
                         escape_values=True,
+                        dim_defaults=category_dim_defaults,
                     )
                 )
             setattr(q, "content_block_html", body_html)
@@ -2482,6 +2609,7 @@ def _annotate_question_render_sequence(
                     opts.get("heading", ""),
                     category_values,
                     known_category_dims,
+                    dim_defaults=category_dim_defaults,
                 ),
             )
             setattr(
@@ -2491,13 +2619,17 @@ def _annotate_question_render_sequence(
                     opts.get("subtitle", ""),
                     category_values,
                     known_category_dims,
+                    dim_defaults=category_dim_defaults,
                 ),
             )
             setattr(
                 q,
                 "content_block_links",
                 _substituted_content_block_links(
-                    opts.get("links", []), category_values, known_category_dims
+                    opts.get("links", []),
+                    category_values,
+                    known_category_dims,
+                    dim_defaults=category_dim_defaults,
                 ),
             )
             # Resolve the image if one is set.
@@ -2528,6 +2660,7 @@ def _annotate_question_render_sequence(
                             consent.get("statement", ""),
                             category_values,
                             known_category_dims,
+                            dim_defaults=category_dim_defaults,
                         ),
                         "required": consent.get("required", False),
                     },
@@ -2966,13 +3099,33 @@ def _parse_builder_question_form(data: QueryDict) -> dict[str, Any]:
             # Check if this option should have a follow-up text input
             followup_key = f"option_{renderable_idx}_followup"
             followup_label_key = f"option_{renderable_idx}_followup_label"
+            followup_type_key = f"option_{renderable_idx}_followup_type"
+            followup_required_key = f"option_{renderable_idx}_followup_required"
             renderable_idx += 1
 
             if data.get(followup_key) in {"on", "true", "1", "yes"}:
                 followup_label = (data.get(followup_label_key) or "").strip()
                 if not followup_label:
                     followup_label = f"Please elaborate on '{opt_text}'"
-                opt_dict["followup_text"] = {"enabled": True, "label": followup_label}
+                # Typed follow-ups (GMC 360): the follow-up can be a
+                # free-text box (default) or a Yes/No question shown
+                # when this option is selected, and can be required
+                # when shown.
+                fu_type = (data.get(followup_type_key) or "text").strip()
+                if fu_type not in {"text", "yesno"}:
+                    fu_type = "text"
+                fu_required = data.get(followup_required_key) in {
+                    "on",
+                    "true",
+                    "1",
+                    "yes",
+                }
+                opt_dict["followup_text"] = {
+                    "enabled": True,
+                    "label": followup_label,
+                    "type": fu_type,
+                    "required": fu_required,
+                }
 
             options.append(opt_dict)
 
@@ -3553,7 +3706,9 @@ def _serialize_question_for_builder(
                             option_followup_config[str(idx)] = {
                                 "label": opt["followup_text"].get(
                                     "label", "Please elaborate"
-                                )
+                                ),
+                                "type": opt["followup_text"].get("type", "text"),
+                                "required": bool(opt["followup_text"].get("required")),
                             }
         elif isinstance(options, list):
             for opt in options:
@@ -3582,7 +3737,9 @@ def _serialize_question_for_builder(
                         option_followup_config[str(renderable_idx)] = {
                             "label": opt["followup_text"].get(
                                 "label", "Please elaborate"
-                            )
+                            ),
+                            "type": opt["followup_text"].get("type", "text"),
+                            "required": bool(opt["followup_text"].get("required")),
                         }
                 renderable_idx += 1
 
@@ -7642,6 +7799,14 @@ def _handle_participant_submission(
             # see _safe_participant_redirect).
             return _safe_participant_redirect(request, survey)
 
+        # Validate required option follow-ups (GMC 360): a follow-up
+        # marked required must be answered when its option was selected.
+        followup_errors = _validate_required_followups(survey, answers)
+        if followup_errors:
+            for msg in followup_errors:
+                messages.error(request, msg)
+            return _safe_participant_redirect(request, survey)
+
         # Validate date/time/datetime answers (parseable + within range).
         datetime_errors = _validate_text_format_answers(survey, answers)
         if datetime_errors:
@@ -8329,7 +8494,11 @@ def _survey_tokens_generate_360_set(
 @require_http_methods(["GET", "POST"])
 def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
-    require_can_edit(request.user, survey)
+    # Distributors can generate token batches / QR codes and see completion
+    # counts (used_at) — the tokens page is their surface. Response content
+    # is never shown here. Edit-level actions on this page (per-token
+    # category overrides) stay gated by can_edit below.
+    require_can_distribute(request.user, survey)
     if request.method == "POST":
         # Issue #355: the "Generate full 360 set" action posts with
         # action=generate_360_set; the plain batch form posts without it.
@@ -8365,6 +8534,22 @@ def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
             expires_at=expires_at,
             category_values=category_values,
         )
+        # Audit the batch generation (metadata only — never the token
+        # strings or the category values, which may carry subject names;
+        # see the AGENTS.md logging rules).
+        AuditLog.objects.create(
+            actor=request.user,
+            scope=AuditLog.Scope.SURVEY,
+            survey=survey,
+            action=AuditLog.Action.CREATE,
+            severity=AuditLog.Severity.INFO,
+            message="Generated invitation token batch.",
+            metadata={
+                "count": len(created),
+                "dimensions": sorted(category_values.keys()),
+                "note_present": bool(note),
+            },
+        )
         messages.success(request, f"Created {len(created)} tokens.")
         return redirect("surveys:tokens", slug=slug)
     # Issue #356: filter the flat token list by the subject dimension's
@@ -8394,6 +8579,7 @@ def survey_tokens(request: HttpRequest, slug: str) -> HttpResponse:
             "subject_choices": subject_choices,
             "subject_category": subject_category,
             "role_category": role_category,
+            "can_edit": can_edit_survey(request.user, survey),
         },
     )
 
@@ -8465,7 +8651,9 @@ def survey_token_categories_edit(
 @login_required
 def survey_tokens_export_csv(request: HttpRequest, slug: str) -> HttpResponse:
     survey = get_object_or_404(Survey, slug=slug)
-    require_can_edit(request.user, survey)
+    # Token strings are distribution material, not results — distributors
+    # need the CSV to send tokens to raters.
+    require_can_distribute(request.user, survey)
     output = io.StringIO()
     writer = csv.writer(output)
     cats = list(survey.respondent_categories.order_by("order", "id"))
@@ -15846,16 +16034,28 @@ def bulk_upload(request: HttpRequest, slug: str) -> HttpResponse:
 def _option_followup_label(option: Any) -> str | None:
     """Return the follow-up label for a question option, if configured.
 
-    Options store follow-ups as ``followup_text: {enabled, label}`` (the shape
-    written by both the builder form and the outline importer). Legacy rows
-    used ``has_followup_text`` / ``followup_text_label`` — both shapes are
-    read so existing surveys export their follow-ups to the outline.
+    Options store follow-ups as ``followup_text: {enabled, label, type}``
+    (the shape written by both the builder form and the outline importer;
+    ``type`` is "text" by default or "yesno" for a typed Yes/No
+    follow-up). Legacy rows used ``has_followup_text`` /
+    ``followup_text_label`` — both shapes are read so existing surveys
+    export their follow-ups to the outline.
     """
     if not isinstance(option, dict):
         return None
     fu = option.get("followup_text")
     if isinstance(fu, dict) and fu.get("enabled") and fu.get("label"):
-        return str(fu["label"])
+        label = str(fu["label"])
+        # Typed/required follow-ups round-trip through the outline: the
+        # markers are appended so import restores the configuration.
+        markers = []
+        if fu.get("type") == "yesno":
+            markers.append("yesno")
+        if fu.get("required"):
+            markers.append("required")
+        if markers:
+            label = f"{label} ({', '.join(markers)})"
+        return label
     if option.get("has_followup_text"):
         return str(option.get("followup_text_label") or "Please specify")
     return None
@@ -17551,6 +17751,23 @@ def question_group_publish(request, slug, gid):
 
     # Check if group has questions
     questions = SurveyQuestion.objects.filter(survey=survey, group=group)
+
+    # Publishing is organisation-level only (global templates are curated —
+    # see docs/question-group-template-library.md). Non-org surveys have
+    # nothing to publish to, so show guidance instead of the form.
+    if not survey.organization:
+        return render(
+            request,
+            "surveys/question_group_publish.html",
+            {
+                "survey": survey,
+                "group": group,
+                "form": None,
+                "questions": questions,
+                "can_publish": False,
+            },
+        )
+
     if not questions.exists():
         messages.error(request, "Cannot publish an empty question group.")
         return redirect("surveys:group_builder", slug=slug, gid=gid)
@@ -17605,6 +17822,7 @@ def question_group_publish(request, slug, gid):
             "group": group,
             "form": form,
             "questions": questions,
+            "can_publish": True,
         },
     )
 
@@ -17613,7 +17831,6 @@ def question_group_publish(request, slug, gid):
 @ratelimit(key="user", rate="50/h", block=True)
 def published_template_import(request, template_id, slug):
     """Import a published template into a survey."""
-    from .markdown_import import parse_bulk_markdown
     from .permissions import require_can_edit, require_can_import_published_template
 
     template = get_object_or_404(PublishedQuestionGroup, pk=template_id)
@@ -17624,8 +17841,14 @@ def published_template_import(request, template_id, slug):
 
     if request.method == "POST":
         try:
-            # Parse markdown
-            groups = parse_bulk_markdown(template.markdown)
+            # Parse markdown with collections so CATEGORIES blocks and
+            # ``~ cat:`` suffixes are honoured (GMC 360 instruments are
+            # multi-population templates — the plain parser would leave
+            # the cat suffix in the group name and drop the rules).
+            from .markdown_import import parse_bulk_markdown_with_collections
+
+            parsed = parse_bulk_markdown_with_collections(template.markdown)
+            groups = parsed["groups"]
 
             if not groups:
                 messages.error(request, "Template has no valid groups to import.")
@@ -17674,6 +17897,39 @@ def published_template_import(request, template_id, slug):
                             required=bool(row.get("required", False)),
                             order=idx + row_idx,
                         )
+
+            # Apply CATEGORIES config: create the dimensions (additively —
+            # unlike bulk upload, an import never wipes existing ones) and
+            # apply the ``~ cat:`` rules to the imported group.
+            categories_cfg = parsed.get("categories")
+            categories_group_rules = parsed.get("categories_group_rules", {})
+            if categories_cfg and categories_cfg.get("dimensions"):
+                existing_dims = set(
+                    survey.respondent_categories.values_list("name", flat=True)
+                )
+                for i, dim in enumerate(categories_cfg["dimensions"]):
+                    if dim["name"] in existing_dims:
+                        continue
+                    RespondentCategory.objects.create(
+                        survey=survey,
+                        name=dim["name"],
+                        label=dim.get("label", ""),
+                        allowed_values=dim.get("allowed_values", []),
+                        free_text=bool(dim.get("free_text", False)),
+                        resolution_source=dim.get(
+                            "resolution_source",
+                            RespondentCategory.ResolutionSource.TOKEN,
+                        ),
+                        profile_field=dim.get("profile_field", ""),
+                        order=i + 1,
+                    )
+                rules_list = categories_group_rules.get(new_group.name, [])
+                if rules_list:
+                    rules: dict[str, list[str]] = {}
+                    for dim_name, val in rules_list:
+                        rules.setdefault(dim_name, []).append(val)
+                    new_group.required_categories = rules
+                    new_group.save(update_fields=["required_categories"])
 
             # Increment import count
             template.increment_import_count()

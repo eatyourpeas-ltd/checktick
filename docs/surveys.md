@@ -11,9 +11,9 @@ This guide explains how to create an organisation, create a survey, and how cont
 Organisations own surveys and manage access. Each organisation has:
 
 - Owner — the user who created the org
-- Members — users with roles: Admin, Creator, Viewer
+- Members — users with roles: Admin, Creator, Viewer, Distributor
 
-Admins can manage members and surveys. Creators can build and manage surveys. Viewers can view responses/analytics (when enabled) but cannot edit structure.
+Admins can manage members and surveys. Creators can build and manage surveys. Viewers can view responses/analytics (when enabled) but cannot edit structure. Distributors can generate access tokens and QR codes and see completion counts, but cannot see responses (see [Distributors and the Distributing group](#distributors-and-the-distributing-group)).
 
 ## Create an organisation
 
@@ -92,6 +92,8 @@ You can use the Outline when you already have content drafted. The Outline lets 
 
 > **Naming rules:** In the code, API, data model, and docs, sections are called `QuestionGroup`. The user-facing UI says "Section" / "Sections". The template library is "Question Bank" in the UI (navbar + page title) but `PublishedQuestionGroup` / `published_templates_list` / `/surveys/templates/` in code. Publishing action labels: "Share as template" / "Publish to Question Bank" (UI) vs `question_group_publish` view (code).
 
+**Publishing to the Question Bank:** Publishing is organisation-level only. The survey must belong to an organisation (personal surveys hide the publish action and show guidance instead). Publishing to the global, all-users library is not available in the user workflow; it is an admin-only action via the API. To get an instrument into the global library, submit it for review by emailing hello@checktick.com or by opening a GitHub issue using the template in the repository.
+
 ## Question types
 
 Supported types (as of now):
@@ -157,9 +159,24 @@ The logic engine evaluates conditions in order, so place the most specific rule 
 
 ## Managing access to surveys
 
-- Add survey members with roles (Creator, Viewer)
+- Add survey members with roles (Creator, Viewer, Distributor)
 - Organisation Admins can manage any survey within their org
 - Survey Creators can edit structure and manage members for that survey
+- Adding a Distributor (like adding a Viewer) requires the Organisation tier
+
+### Distributors and the Distributing group
+
+The Distributor role is for people who hand out a survey but should not see what respondents said. A distributor can:
+
+- Generate token batches and QR codes on the tokens page (`/surveys/<slug>/tokens/`)
+- See completion counts (how many responses have been received)
+- Export the token CSV from the tokens page
+
+A distributor cannot edit questions, settings, or publication status, cannot view or export results, and cannot manage members. A distributor-only membership does not grant access to results.
+
+On the surveys page, distributor memberships are listed in a separate **Distributing** group, so they are easy to tell apart from surveys you own or edit.
+
+Distributors are used in the [appraisal workflow](/docs/reporting-and-exports/#appraisal-reports): the appraisee receives the Distributor role on their own appraisal survey so they can share the feedback link without seeing the responses.
 
 ## Progress tracking
 

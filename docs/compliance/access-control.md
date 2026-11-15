@@ -45,6 +45,28 @@ users only access data necessary for their role.
 | **Editor** | Survey Mgmt | Create/Edit surveys; Cannot view or export response data. |
 | **Data Custodian** | Data Mgmt | View and Export assigned survey data; Cannot edit survey logic. |
 | **Viewer** | Read Only | View survey metadata; No access to PII/Sensitive data. |
+| **Distributor** (survey-level) | Distribution Only | Generate token batches and QR codes; view completion counts; export the token CSV. Cannot edit the survey, view or export results, or manage members. Tier-gated as for Viewer (Organisation tier). |
+
+### 3.1 Appraisal Accountability Chain
+
+For GMC-style 360 appraisal surveys run by a designated body, access follows a three-tier accountability chain:
+
+* **Responsible Officer (RO):** The organisation owner or admin. The RO has portfolio oversight of every appraisal, co-signs exception reviews, and is the recovery route when an appraiser leaves.
+* **Appraiser:** The survey owner of each appraisee's appraisal survey. The appraiser can unlock results via the organisation key, release reports, and raise exception reviews.
+* **Appraisee (distributor):** Holds a DISTRIBUTOR membership on their own survey. The distributor can generate token batches and QR codes, see completion counts, and export the token CSV. The distributor cannot edit the survey, view or export results, or manage members. A distributor-only membership does not grant results access, and the appraisee holds no organisation key path.
+
+Survey ownership remains with the appraiser. This is an organisational obligation, so the appraisee cannot alter or withdraw results.
+
+### 3.2 Two-Party Exception Review
+
+Identifying a pseudonymous colleague rater is an access control, not a view setting:
+
+* **Default:** Reporting never shows the token-to-response linkage.
+* **Raise:** The appraiser raises an exception review, recording the response and a reason.
+* **Co-signature:** An RO must co-sign before the linkage (token, category values, and submission metadata) is revealed. The co-signing user must differ from the raiser; nobody can co-sign their own request.
+* **Visibility:** The approved linkage is visible only to the appraiser and the RO. The appraisee never sees exception reviews.
+* **Released reports:** Record only that an approved exception review occurred (a count), never its content.
+* **Audit:** Raise, approve, and reject are all audit-logged. Disclosure (approval) is logged at WARNING severity. See `access-audit-logs.md`.
 
 ## 4. Provisioning & Deprovisioning (Leaver's Process)
 

@@ -1,0 +1,59 @@
+{% extends 'base.html' %}
+{% load i18n %}
+{% block title %}{% trans "Disclosed rater linkage" %} - CheckTick{% endblock %}
+{% block content %}
+<div class="max-w-3xl mx-auto">
+  <h1 class="text-2xl font-semibold mb-2">{% trans "Disclosed rater linkage" %}</h1>
+  <p class="text-sm opacity-70 mb-6">{% trans "Co-signed by the Responsible Officer. This disclosure is recorded on the audit trail. The content of the disclosure stays with the appraiser and the RO — the released report records only that an exception review occurred." %}</p>
+
+  <div class="card bg-base-100 shadow mb-6">
+    <div class="card-body">
+      <h2 class="card-title text-base">{% trans "Review" %}</h2>
+      <dl class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+        <dt class="opacity-60">{% trans "Raised by" %}</dt>
+        <dd class="sm:col-span-2">{{ review.raised_by.get_full_name|default:review.raised_by.username }}</dd>
+        <dt class="opacity-60">{% trans "Reason" %}</dt>
+        <dd class="sm:col-span-2">{{ review.reason }}</dd>
+        <dt class="opacity-60">{% trans "Co-signed by" %}</dt>
+        <dd class="sm:col-span-2">{{ review.decided_by.get_full_name|default:review.decided_by.username }} — {{ review.decided_at|date:"Y-m-d H:i" }}</dd>
+        {% if review.decision_note %}
+        <dt class="opacity-60">{% trans "Decision note" %}</dt>
+        <dd class="sm:col-span-2">{{ review.decision_note }}</dd>
+        {% endif %}
+      </dl>
+    </div>
+  </div>
+
+  <div class="card bg-base-100 shadow mb-6">
+    <div class="card-body">
+      <h2 class="card-title text-base">{% trans "Identified rater" %}</h2>
+      <dl class="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
+        <dt class="opacity-60">{% trans "Response" %}</dt>
+        <dd class="sm:col-span-2">#{{ linkage.response_id }} — {{ linkage.submitted_at|date:"Y-m-d H:i" }}</dd>
+        {% if linkage.authenticated_user %}
+        <dt class="opacity-60">{% trans "Authenticated as" %}</dt>
+        <dd class="sm:col-span-2">{{ linkage.authenticated_user }}</dd>
+        {% endif %}
+        {% if linkage.token %}
+        <dt class="opacity-60">{% trans "Invitation token" %}</dt>
+        <dd class="sm:col-span-2 font-mono text-xs break-all">{{ linkage.token }}</dd>
+        <dt class="opacity-60">{% trans "Token note" %}</dt>
+        <dd class="sm:col-span-2">{{ linkage.token_note|default:"—" }}</dd>
+        <dt class="opacity-60">{% trans "Token created" %}</dt>
+        <dd class="sm:col-span-2">{{ linkage.token_created_at|date:"Y-m-d H:i" }}</dd>
+        <dt class="opacity-60">{% trans "Token used" %}</dt>
+        <dd class="sm:col-span-2">{{ linkage.token_used_at|date:"Y-m-d H:i"|default:"—" }}</dd>
+        {% endif %}
+        {% for dim, val in linkage.category_values.items %}
+        <dt class="opacity-60">{{ dim }}</dt>
+        <dd class="sm:col-span-2">{{ val }}</dd>
+        {% endfor %}
+      </dl>
+    </div>
+  </div>
+
+  <div class="flex gap-2">
+    <a href="{% url 'appraisal:exception_reviews' pk=rel.pk %}" class="btn btn-outline btn-sm">{% trans "Back to exception reviews" %}</a>
+  </div>
+</div>
+{% endblock %}
