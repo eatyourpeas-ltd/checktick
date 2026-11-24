@@ -19,8 +19,9 @@ category: dspt-6-incidents
 | NM-03 | 01/08/2026 | Near-Miss | High | SVG upload in survey builder image-choice questions (`_validate_and_process_image`) allows stored XSS via direct `/media/` navigation. SVG files skip sanitisation and execute embedded scripts in the CheckTick origin. | Removed SVG upload support, added script-bearing SVG and animation regression tests, and confirmed no legacy SVG records or files existed in production media. | Closed |
 | INC-01 | 05/11/2026 | Incident (availability) | Low | Site returned 503s for several minutes while the Vault was sealed for the interim backup window: readiness probes pointed at the deep `/healthz` (which fails on a sealed Vault), draining all Service endpoints. No data accessed, lost, altered or exposed. | Probe separation: startup/liveness pinned to the trivial `/api/health`, readiness kept deep on `/healthz`; seal ceremonies treated as availability windows (`k8s/web.yaml` design notes). | Closed |
 | INC-02 | 08/11/2026 | Incident (availability) | Low | ~8 min site unavailability (~17:40–17:51 UTC) during the 0.28.1 deploy window: Civo API-server connection loss broke the deploy workflow's CronJob-roll step (firing a rollback against a healthy deployment), and the replaced web pods — both converged onto ONE node by the roll — flapped through containerd create-errors. No data accessed, lost, altered or exposed. | Web `replicas: 3` + max-weight preferred anti-affinity (manifests), CronJob-roll step retries + degrade-to-warning (workflow), Civo control-plane flakiness reported to Civo support (Supplier Incident Log). Verified on the next deploy: zero-downtime roll, 0 restarts. | Closed |
+| INC-03 | 21/11/2026 | Incident (availability) | High | Total site unavailability from 06:35 UTC (ongoing >11h at time of logging): Civo platform-wide network failure affecting ALL regions (LON1, NYC1, FRA1, MUM1, JKT1) — Network components Down while Compute/Storage remained Operational. All TCP connections to the cluster node (74.220.17.170) time out on every port (80/443/6443): traffic never reaches the cluster (timeouts, not 503s; DNS resolution correct) and kubectl is unusable. No data accessed, lost, altered or exposed; data at rest and all backups unaffected. | Detected by StatusCake external monitor — Civo sent no incident notification email; the status page was the only channel. Civo timeline: 06:35 Investigating → 12:26 Identified (~6h, no interim updates) → 17:12 restoration expected progressively within ~2h. Post-recovery checklist prepared (node readiness, web pod placement + coredns replicas, Vault seal check/unseal, /healthz, s/k8s-backup-verify). Hardening escalated: cross-provider UK backup copy, degraded-mode fallback page, second external monitor, DR drill, SLA review + PIR request. See Supplier Incident Log. | Open |
 
-**Production Incidents to date: 2 — both availability-only; zero data accessed, lost, altered or exposed (no data security or protection impact)**
+**Production Incidents to date: 3 — all availability-only; zero data accessed, lost, altered or exposed (no data security or protection impact)**
 **Near-Misses to date: 3 (3 resolved, 0 open)**
 
 ---
@@ -147,15 +148,59 @@ category: dspt-6-incidents
   health is part of availability, and supplier API stability is a dependency
   to monitor.
 
+### Record: INC-03 — Civo platform-wide network outage (total site unavailability)
+
+* **Discovery Date:** 21/11/2026 06:35 UTC (ongoing at time of logging, 17:39 UTC)
+* **Reporter:** StatusCake external monitor (5-min `/healthz` polling). Civo sent
+  no incident notification email — `status.civo.com` was the only channel.
+* **Severity:** High (availability) — zero data impact
+* **Impact:** Total site unavailability from 06:35 UTC. TCP connections to the
+  cluster node (74.220.17.170) time out on all ports (80/443/6443) — traffic
+  never reaches the cluster (connection timeouts, not 503s; DNS resolution
+  correct throughout). kubectl unusable (API server unreachable). No data
+  accessed, lost, altered or exposed; Compute and Storage remained Operational
+  per Civo's status page, so data at rest and all backups were unaffected.
+* **Root Cause:** Supplier-side: Civo platform-wide network failure affecting
+  ALL regions (LON1, NYC1, FRA1, MUM1, JKT1) — Network components Down while
+  Compute/Storage stayed Operational; the Civo API and website were also Down.
+  No in-cluster measure (replicas, PDBs, probes) can mitigate a provider
+  network-layer failure.
+* **Civo comms timeline:** 06:35 Investigating → 12:26 Identified (~6h to root
+  cause, no interim updates) → 17:12 restoration expected progressively over
+  the following ~2 hours.
+* **Corrective Action:** In progress. Post-recovery checklist prepared (node
+  readiness; web pod placement + coredns 2 replicas per standing hazards;
+  Vault seal check + unseal ceremony if any node restarted; `/healthz`;
+  `s/k8s-backup-verify`). Hardening escalated in priority: cross-provider UK
+  backup copy (all backups currently land in the same Civo LON1 object store —
+  see Backup Isolation Procedure); degraded-mode static fallback page served
+  from outside Civo; second independent external monitor; DR drill to measure
+  a real RTO; SLA review and service-credit claim; PIR requested from Civo.
+  Also noted: Civo LON1 maintenance scheduled 23/11/2026 (node restarts →
+  planned Vault unseal duty).
+* **Verification:** Pending restoration — completion of the post-recovery
+  checklist to be recorded here.
+* **Lessons Learned:** (i) A provider-region network failure is total for a
+  single-region deployment; only multi-site architecture or formally accepted
+  risk addresses it. (ii) Triage rule: `/healthz` 503 = our problem (Vault/DB/
+  pods); connection timeout = provider problem (check status.civo.com before
+  touching the cluster). (iii) Supplier incident notification cannot be
+  relied upon — external monitoring was the actual detection path; a second
+  independent monitor is required. (iv) Backups held with the same provider
+  and in the same region as the cluster do not satisfy backup isolation
+  against provider-level failure — cross-provider copies are required.
+
 ---
 
 ## 3. Statement on Production Incidents
 
 EatYourPeas Ltd confirms that {{ platform_name }} has had **zero production
- data security or protection incidents** since the platform's launch. Two
-brief availability-only incidents (INC-01, INC-02 — site unavailability
-measured in minutes, during infrastructure operations) are recorded above; in
-neither was any data accessed, lost, altered or exposed. This is
+ data security or protection incidents** since the platform's launch. Three
+availability-only incidents are recorded above: INC-01 and INC-02 (brief,
+minutes-scale unavailability during infrastructure operations) and INC-03
+(an extended supplier-side outage — a Civo platform-wide network failure on
+21/11/2026 causing total site unavailability for most of a day). In none of
+these was any data accessed, lost, altered or exposed. This is
 attributed to:
 
 - Continuous automated vulnerability scanning (pip-audit, Dependabot, CodeQL)
@@ -174,4 +219,7 @@ This statement is reviewed and confirmed at each quarterly SIRO sign-off below.
 | :--- | :--- | :--- | :--- | :--- |
 | Q3 2025 (Jul–Sep) | 0 | 0 | Platform in pre-launch hardening phase. | {{ siro_name }}, SIRO |
 | Q4 2025 (Oct–Dec) | 0 | 0 | No incidents or near-misses. | {{ siro_name }}, SIRO |
-| Q1 2026 (Jan–Mar) | 0 | 1 | NM-01 detected and resolved via auto
+| Q1 2026 (Jan–Mar) | 0 | 1 | NM-01 detected and resolved via automated pipeline. | {{ siro_name }}, SIRO |
+| Q2 2026 (Apr–Jun) | 0 | 0 | No incidents or near-misses. | {{ siro_name }}, SIRO |
+| Q3 2026 (Jul–Sep) | 0 | 2 | NM-02, NM-03 found and fixed via security deep-dive review. | {{ siro_name }}, SIRO |
+| Q4 2026 (Oct–Dec) | 3 | 0 | INC-01 (Vault seal window), INC-02 (deploy-window outage), INC-03 (Civo platform-wide network outage, 21/11 — ongoing at time of writing; supplier incident under monitoring). | {{ siro_name }}, SIRO |
