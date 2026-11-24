@@ -24,20 +24,20 @@
       "key": "axe_core",
       "name": "axe-core",
       "npm_package": "axe-core",
-      "version": "4.14.0",
+      "version": "4.14.1",
       "static_file": "js/axe-core.min.js",
       "source_path": "axe.min.js",
-      "sri": "sha384-lFUXB8tI4BaTE1bqxH9eeAXON2NH1qsdAhs7S5L++nUNP5QOy+hwr0C3TYEJUEl0",
+      "sri": "sha384-xt1SFg49QaDwsyt0Xfs2XAyBtYPClXl3X2q5OOLeGAUmq9jZTYIMdztpF99WdhiH",
       "purpose": "WCAG accessibility testing"
     },
     {
       "key": "redoc",
       "name": "ReDoc",
       "npm_package": "redoc",
-      "version": "3.1.0",
+      "version": "3.2.0",
       "static_file": "js/redoc.standalone.min.js",
       "source_path": "bundles/redoc.standalone.js",
-      "sri": "sha384-JeMYOUn7XELj12XQpz8IRcyCi5pih2IAwvXmTcH3IAFVWrAXJVRNa64PuS3MIj9/",
+      "sri": "sha384-soePwl0x1c2YjeKh+y64SAmVdaWUku+jlcELfXN/40dlTLEP+0/c3Bn+NrkOjL19",
       "purpose": "OpenAPI interactive documentation"
     },
     {
