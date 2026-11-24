@@ -208,3 +208,5 @@ Use this section for routine dependency/library updates where no specific CVE or
 | 24/11/2026 | Dr Simon Chapman | Updated self-hosted axe-core (4.14.0 -> 4.14.1) and regenerated SHA-384 SRI (sha384-xt1SFg49QaDwsyt0Xfs2XAyBtYPClXl3X2q5OOLeGAUmq9jZTYIMdztpF99WdhiH) | Routine JavaScript dependency maintenance (no CVE remediation referenced) | Dr Serena Haywood (SIRO) | ✅ Active |
 
 | 24/11/2026 | Dr Simon Chapman | Updated self-hosted redoc (3.1.0 -> 3.2.0) and regenerated SHA-384 SRI (sha384-soePwl0x1c2YjeKh+y64SAmVdaWUku+jlcELfXN/40dlTLEP+0/c3Bn+NrkOjL19) | Routine JavaScript dependency maintenance (no CVE remediation referenced) | Dr Serena Haywood (SIRO) | ✅ Active |
+
+| 24/11/2026 | Dr Simon Chapman | Updated build-time daisyUI devDependency (5.6.7 -> 5.8.2). Eliminates two Lightning CSS "Invalid empty selector" build warnings emitted by daisyUI 5.6.7 (@scope (:is(.join)) focus rule and @media (hover: hover) .btn:hover rule); affected component styles verified present in rebuilt stylesheet. | Routine build-tooling dependency maintenance (no CVE remediation referenced) | Dr Serena Haywood (SIRO) | ✅ Active |
