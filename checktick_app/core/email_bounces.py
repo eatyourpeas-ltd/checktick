@@ -60,11 +60,16 @@ HARD = "hard"  # permanent failure — the mailbox does not exist / refused
 SOFT = "soft"  # temporary failure — greylisting, full mailbox, delayed
 UNKNOWN = "unknown"  # cannot tell — never act on this
 
-# Graph endpoint for messages in the mailbox Inbox. NDRs are delivered
-# there like any other inbound mail.
+# Graph endpoint template for messages in a mail folder. NDRs are read
+# from every folder a delivery report realistically lands in: the Inbox
+# (the default) and the Junk Email folder — Exchange Online frequently
+# junk-filters machine-generated NDRs, and a bounce read that only sees
+# the Inbox silently misses every junked report (found live 2026-11-25:
+# 0 bounces read while warning emails were demonstrably bouncing).
 _GRAPH_MESSAGES_URL = (
-    "https://graph.microsoft.com/v1.0/users/{mailbox}/mailFolders/Inbox/messages"
+    "https://graph.microsoft.com/v1.0/users/{mailbox}/mailFolders/{folder}/messages"
 )
+_GRAPH_FOLDERS = ("Inbox", "JunkEmail")
 
 # Safety cap on messages examined per run (pagination limit). The sending
 # mailbox should only contain bounces and the odd auto-reply; this bound
@@ -130,24 +135,17 @@ def fetch_bounce_messages(
     max_messages: int = MAX_MESSAGES_PER_RUN,
     request_timeout: int = 30,
 ) -> list[BounceMessage]:
-    """List recent Inbox NDRs from the sending mailbox, parsed.
+    """List recent NDRs from the sending mailbox, parsed.
 
-    Raises ``requests.HTTPError`` on Graph API failure (including 401/403
-    when the Mail.Read application permission is missing — callers should
-    surface that as actionable guidance).
+    Reads the Inbox and the Junk Email folder (Exchange Online often
+    junk-filters NDRs). Raises ``requests.HTTPError`` on Graph API
+    failure (including 401/403 when the Mail.Read application permission
+    is missing — callers should surface that as actionable guidance).
     """
     token = _get_access_token()
     start = (timezone.now() - timedelta(hours=lookback_hours)).strftime(
         "%Y-%m-%dT%H:%M:%SZ"
     )
-    url = _GRAPH_MESSAGES_URL.format(mailbox=mailbox)
-    params = {
-        "$filter": f"receivedDateTime ge {start}",
-        "$orderby": "receivedDateTime desc",
-        "$top": str(_PAGE_SIZE),
-        "$select": "id,subject,receivedDateTime,from,body",
-    }
-    # Ask Graph for plain-text bodies so no HTML parsing is needed.
     headers = {
         "Authorization": f"Bearer {token}",
         "Prefer": 'outlook.body-content-type="text"',
@@ -156,25 +154,35 @@ def fetch_bounce_messages(
     bounces: list[BounceMessage] = []
     fetched = 0
 
-    while url and fetched < max_messages:
-        resp = requests.get(
-            url,
-            params=params if fetched == 0 else None,
-            headers=headers,
-            timeout=request_timeout,
-        )
-        resp.raise_for_status()
-        data = resp.json()
+    for folder in _GRAPH_FOLDERS:
+        if fetched >= max_messages:
+            break
+        url = _GRAPH_MESSAGES_URL.format(mailbox=mailbox, folder=folder)
+        params = {
+            "$filter": f"receivedDateTime ge {start}",
+            "$orderby": "receivedDateTime desc",
+            "$top": str(_PAGE_SIZE),
+            "$select": "id,subject,receivedDateTime,from,body",
+        }
+        while url and fetched < max_messages:
+            resp = requests.get(
+                url,
+                params=params,
+                headers=headers,
+                timeout=request_timeout,
+            )
+            resp.raise_for_status()
+            data = resp.json()
 
-        for message in data.get("value", []):
-            fetched += 1
-            parsed = _parse_message(message)
-            if parsed is not None:
-                bounces.append(parsed)
+            for message in data.get("value", []):
+                fetched += 1
+                parsed = _parse_message(message)
+                if parsed is not None:
+                    bounces.append(parsed)
 
-        # nextLink already carries the $skip paging parameters.
-        url = data.get("@odata.nextLink")
-        params = None
+            # nextLink already carries the $skip paging parameters.
+            url = data.get("@odata.nextLink")
+            params = None
 
     return bounces
 
