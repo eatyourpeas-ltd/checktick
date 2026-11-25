@@ -858,6 +858,8 @@ def profile(request):
     )
 
 
+@require_http_methods(["GET", "POST"])
+@ratelimit(group="signup", key="ip", rate="10/h", method="POST", block=True)
 def signup(request):
     # Get the 'next' URL from query params (e.g., from survey invite link)
     next_url = request.GET.get("next") or request.POST.get("next")

@@ -274,7 +274,10 @@ class FetchBounceMessagesTests(TestCase):
             "from": {"emailAddress": {"address": "joe@example.com"}},
             "body": {"content": "away"},
         }
-        mock_get.return_value = self._graph_response([ndr, chatter])
+        mock_get.side_effect = [
+            self._graph_response([ndr, chatter]),
+            self._graph_response([]),
+        ]
 
         bounces = fetch_bounce_messages("noreply@checktick.example.com", 168)
 
@@ -289,23 +292,58 @@ class FetchBounceMessagesTests(TestCase):
     @patch(f"{BOUNCES_MODULE}._get_access_token", return_value="fake-token")
     @patch(f"{BOUNCES_MODULE}.requests.get")
     def test_fetch_follows_pagination(self, mock_get, mock_token):
-        first = MagicMock()
-        first.json.return_value = {
+        paged = MagicMock()
+        paged.json.return_value = {
             "value": [],
             "@odata.nextLink": "https://graph.microsoft.com/next",
         }
-        first.raise_for_status.return_value = None
-        second = MagicMock()
-        second.json.return_value = {"value": []}
-        second.raise_for_status.return_value = None
-        mock_get.side_effect = [first, second]
+        paged.raise_for_status.return_value = None
+        last_page = MagicMock()
+        last_page.json.return_value = {"value": []}
+        last_page.raise_for_status.return_value = None
+        next_folder = MagicMock()
+        next_folder.json.return_value = {"value": []}
+        next_folder.raise_for_status.return_value = None
+        mock_get.side_effect = [paged, last_page, next_folder]
 
         fetch_bounce_messages("noreply@checktick.example.com", 24)
 
-        self.assertEqual(mock_get.call_count, 2)
-        # Second page must NOT re-send the filter params (nextLink has them)
-        second_call = mock_get.call_args_list[1]
-        self.assertIsNone(second_call.kwargs.get("params"))
+        # Page 1 (Inbox) → nextLink page 2 (Inbox) → first page of JunkEmail
+        self.assertEqual(mock_get.call_count, 3)
+        # Continuation pages must NOT re-send the filter params (nextLink
+        # has them), but the first page of the next folder must.
+        self.assertIsNone(mock_get.call_args_list[1].kwargs.get("params"))
+        self.assertIsNotNone(mock_get.call_args_list[2].kwargs.get("params"))
+
+    @patch(f"{BOUNCES_MODULE}._get_access_token", return_value="fake-token")
+    @patch(f"{BOUNCES_MODULE}.requests.get")
+    def test_fetch_reads_inbox_and_junk_folders(self, mock_get, mock_token):
+        """NDRs junk-filtered by Exchange must still be found: the read
+        covers both the Inbox and the Junk Email folder."""
+        ndr = {
+            "id": "ccc-333",
+            "subject": "Undeliverable: hello",
+            "receivedDateTime": "2026-11-07T08:00:00Z",
+            "from": {"emailAddress": {"address": "postmaster@c.com"}},
+            "body": {"content": EXCHANGE_HARD_BOUNCE_BODY},
+        }
+        inbox = self._graph_response([])
+        junk = self._graph_response([ndr])
+        mock_get.side_effect = [inbox, junk]
+
+        bounces = fetch_bounce_messages("noreply@checktick.example.com", 168)
+
+        self.assertEqual(len(bounces), 1)
+        self.assertEqual(bounces[0].recipient, "bot@nonexistent.example.com")
+        folders = [
+            (
+                call.args[0].rsplit("mailFolders/", 1)[1].split("/", 1)[0]
+                if call.args
+                else call.kwargs["url"].rsplit("mailFolders/", 1)[1].split("/", 1)[0]
+            )
+            for call in mock_get.call_args_list
+        ]
+        self.assertEqual(folders, ["Inbox", "JunkEmail"])
 
 
 # Settings shared by every command test: bounce phase opted in and the
