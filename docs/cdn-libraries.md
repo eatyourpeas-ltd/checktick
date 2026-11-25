@@ -36,8 +36,8 @@ Templates read SRI values from this manifest via template context (`cdn_assets.*
 | ------- | ------- | ---- | ------- |
 | HTMX | 2.0.11 | `checktick_app/static/js/htmx.min.js` | Dynamic HTML updates without JavaScript |
 | SortableJS | 1.15.7 | `checktick_app/static/js/sortable.min.js` | Drag-and-drop reordering |
-| axe-core | 4.14.0 | `checktick_app/static/js/axe-core.min.js` | WCAG accessibility testing |
-| ReDoc | 3.1.0 | `checktick_app/static/js/redoc.standalone.min.js` | OpenAPI interactive documentation |
+| axe-core | 4.14.1 | `checktick_app/static/js/axe-core.min.js` | WCAG accessibility testing |
+| ReDoc | 3.2.0 | `checktick_app/static/js/redoc.standalone.min.js` | OpenAPI interactive documentation |
 | NHS Frontend | 10.7.2 | `checktick_app/static/css/nhsuk-frontend.min.css` | NHS design system styling |
 <!-- CDN_LIBRARIES_TABLE:END -->
 
@@ -58,16 +58,16 @@ sha384-2OatzQy1H+Zd/IIrjr1TcuDGqLXeHhbooAyJY1KdQMKnr4LZ22k31GBLdYKHmVjg
 sha384-pAVIuzMQbJcj7JX9XYTtp8sSNh3OvFXn0g9ldX+lANHPoXFdYVKw/2G1gS/eU62A
 ```
 
-### axe-core 4.14.0
+### axe-core 4.14.1
 
 ```text
-sha384-lFUXB8tI4BaTE1bqxH9eeAXON2NH1qsdAhs7S5L++nUNP5QOy+hwr0C3TYEJUEl0
+sha384-xt1SFg49QaDwsyt0Xfs2XAyBtYPClXl3X2q5OOLeGAUmq9jZTYIMdztpF99WdhiH
 ```
 
-### ReDoc 3.1.0
+### ReDoc 3.2.0
 
 ```text
-sha384-JeMYOUn7XELj12XQpz8IRcyCi5pih2IAwvXmTcH3IAFVWrAXJVRNa64PuS3MIj9/
+sha384-soePwl0x1c2YjeKh+y64SAmVdaWUku+jlcELfXN/40dlTLEP+0/c3Bn+NrkOjL19
 ```
 
 ### NHS Frontend 10.7.2
