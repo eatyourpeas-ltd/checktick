@@ -21,6 +21,8 @@ import requests
 
 from checktick_app.core.email_bounces import (
     HARD,
+    POLICY,
+    POLICY_PRUNE_MAX,
     SOFT,
     UNKNOWN,
     BounceMessage,
@@ -142,16 +144,17 @@ class ParseBounceTests(TestCase):
         self.assertEqual(recipient, "full@example.com")
         self.assertEqual(classification, SOFT)
 
-    def test_policy_spf_bounce_is_never_hard(self):
-        """5.7.x policy/SPF rejections must not prune — the mailbox may
-        exist and our own mail may be the problem (misconfigured SPF
-        would otherwise prune every unconfirmed signup)."""
+    def test_policy_spf_bounce_is_policy_not_hard(self):
+        """5.7.x policy/SPF rejections classify as POLICY — never hard, so
+        they never prune on a single NDR. The prune command volume-guards
+        them (a mass 5.7.x storm means our own SPF/DKIM is broken, not that
+        every recipient is fake) and suppresses further warning emails."""
         recipient, classification, _ = parse_bounce(
             "Undeliverable: Please confirm your email address",
             POLICY_BOUNCE_BODY,
         )
         self.assertEqual(recipient, "realperson@example.com")
-        self.assertEqual(classification, UNKNOWN)
+        self.assertEqual(classification, POLICY)
 
     def test_undeliverable_subject_without_status_is_unknown(self):
         """No diagnostic status → cannot distinguish a policy bounce,
@@ -402,6 +405,87 @@ class PruneBouncePhaseTests(TestCase):
         self.assertEqual(log.metadata.get("email"), "bot@nonexistent.example.com")
         self.assertEqual(log.metadata.get("bounce_status"), "550 5.4.1")
         self.assertIn("Bounce pruned: 1", self.out.getvalue())
+
+    @patch(f"{PRUNE_COMMAND_MODULE}.fetch_bounce_messages")
+    def test_policy_bounce_prunes_unconfirmed_account(self, mock_fetch):
+        """A 5.7.x policy rejection (e.g. a parliamentary MTA blocking
+        external mail) never resolves — the unconfirmed account is pruned
+        and the address is suppressed from further warning emails."""
+        user = self._create_user("mpoffice", "mp@bundestag.example.com")
+        user_id = user.id
+        mock_fetch.return_value = [
+            _bounce(
+                recipient="mp@bundestag.example.com",
+                classification=POLICY,
+                status="550 5.7.520",
+            )
+        ]
+
+        call_command("prune_unconfirmed_users", stdout=self.out)
+
+        self.assertFalse(User.objects.filter(id=user_id).exists())
+        log = AuditLog.objects.filter(action=AuditLog.Action.USER_DELETED).first()
+        self.assertIsNotNone(log)
+        self.assertEqual(log.metadata.get("reason"), "email_policy_rejected")
+
+    @patch(f"{PRUNE_COMMAND_MODULE}.fetch_bounce_messages")
+    def test_policy_bounce_suppresses_warning_email(self, mock_fetch):
+        """An account whose address policy-rejected our mail is skipped by
+        the warning phase — re-emailing an address that already rejected us
+        is guaranteed to bounce again."""
+        joined = timezone.now() - timedelta(days=23)  # inside the 1-week window
+        user = self._create_user(
+            "mpoffice2", "mp2@bundestag.example.com", date_joined=joined
+        )
+        mock_fetch.return_value = [
+            _bounce(
+                recipient="mp2@bundestag.example.com",
+                classification=POLICY,
+                status="550 5.7.520",
+            )
+        ]
+
+        with patch(
+            f"{PRUNE_COMMAND_MODULE}.send_unconfirmed_account_warning_email",
+            return_value=True,
+        ) as mock_send:
+            call_command("prune_unconfirmed_users", stdout=self.out)
+
+        mock_send.assert_not_called()
+        # Account still exists (prune phase ran on the same evidence, so it
+        # is gone — use a fresh user to isolate the suppression check).
+        self.assertFalse(User.objects.filter(id=user.id).exists())
+
+    @patch(f"{PRUNE_COMMAND_MODULE}.fetch_bounce_messages")
+    def test_policy_circuit_breaker_blocks_pruning(self, mock_fetch):
+        """More than EMAIL_BOUNCE_POLICY_PRUNE_MAX distinct 5.7.x recipients
+        in one run means OUR sending config is broken (mass-bouncing
+        genuine signups) — no policy-based pruning, warnings not suppressed."""
+        joined = timezone.now() - timedelta(days=23)
+        user = self._create_user(
+            "realperson", "realperson@example.com", date_joined=joined
+        )
+        mock_fetch.return_value = [
+            _bounce(
+                recipient=f"person{i}@example.com",
+                classification=POLICY,
+                status="550 5.7.520",
+                message_id=f"msg-{i}",
+            )
+            for i in range(POLICY_PRUNE_MAX + 1)
+        ]
+
+        with patch(
+            f"{PRUNE_COMMAND_MODULE}.send_unconfirmed_account_warning_email",
+            return_value=True,
+        ) as mock_send:
+            call_command("prune_unconfirmed_users", stdout=self.out)
+
+        # No pruning on policy evidence, and the genuine user still gets
+        # their warning (addresses are NOT suppressed under the breaker).
+        self.assertTrue(User.objects.filter(id=user.id).exists())
+        mock_send.assert_called_once()
+        self.assertIn("POLICY CIRCUIT BREAKER", self.out.getvalue())
 
     @patch(f"{PRUNE_COMMAND_MODULE}.fetch_bounce_messages")
     def test_hard_bounce_deactivates_user_with_data(self, mock_fetch):

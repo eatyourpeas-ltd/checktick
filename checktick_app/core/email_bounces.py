@@ -59,6 +59,20 @@ logger = logging.getLogger(__name__)
 HARD = "hard"  # permanent failure — the mailbox does not exist / refused
 SOFT = "soft"  # temporary failure — greylisting, full mailbox, delayed
 UNKNOWN = "unknown"  # cannot tell — never act on this
+# 5.7.x policy/spam/block rejections (incl. 5.7.26 SPF failure). The
+# mailbox may well exist — OUR mail may be the problem (e.g. CheckTick's
+# own SPF/DKIM broken, or a recipient MTA blocking external mail). Never
+# pruned on a single NDR; the prune command prunes these only below a
+# per-run volume threshold (a mass 5.7.x storm means our sending config
+# is broken, not that every recipient is fake), and always suppresses
+# further warning emails to them.
+POLICY = "policy"
+
+# Circuit-breaker threshold for policy-based pruning: more distinct 5.7.x
+# recipients than this in a single run means CheckTick's own sending config
+# is probably broken (mass-bouncing genuine signups), so the run prunes
+# nothing on policy evidence. Override with EMAIL_BOUNCE_POLICY_PRUNE_MAX.
+POLICY_PRUNE_MAX = 25
 
 # Graph endpoint template for messages in a mail folder. NDRs are read
 # from every folder a delivery report realistically lands in: the Inbox
@@ -234,8 +248,8 @@ def parse_bounce(subject: str, body: str) -> tuple[str | None, str, str | None]:
     * 4xx status (``452 4.2.2``) = soft (temporary — greylisting, full mailbox)
     * "Delayed"/"Delay" subject with no status = soft
     * 5xx status that is NOT 5.7.x policy = hard (the mailbox does not exist)
-    * 5.7.x policy/spam/SPF rejections = unknown — the mailbox may exist;
-      our own mail may be the problem, so this is never pruned
+    * 5.7.x policy/spam/SPF rejections = policy — volume-guarded pruning in
+      the command; warning emails suppressed
     * "Undeliverable" subject with no diagnostic status = unknown — the
       wording is also used by policy gateways
     * anything else = unknown — never acted on
@@ -252,9 +266,10 @@ def parse_bounce(subject: str, body: str) -> tuple[str | None, str, str | None]:
         return recipient, SOFT, status_code
 
     if enhanced_class and enhanced_class.startswith("5.7."):
-        # Policy/spam/block rejection (incl. 5.7.26 SPF failure). The
-        # mailbox may well exist — never prune on this evidence.
-        return recipient, UNKNOWN, status_code
+        # Policy/spam/block rejection (incl. 5.7.26 SPF failure). See the
+        # POLICY constant: never pruned on a single NDR, volume-guarded in
+        # the prune command, and warning emails suppressed.
+        return recipient, POLICY, status_code
 
     return recipient, HARD, status_code
 

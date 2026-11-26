@@ -61,7 +61,11 @@ from checktick_app.core.account_pruning import (
     get_feature_cutoff_date,
     prune_unconfirmed_user,
 )
-from checktick_app.core.email_bounces import fetch_bounce_messages
+from checktick_app.core.email_bounces import (
+    POLICY,
+    POLICY_PRUNE_MAX,
+    fetch_bounce_messages,
+)
 from checktick_app.core.email_utils import send_unconfirmed_account_warning_email
 from checktick_app.core.email_validation import check_email_deliverability
 
@@ -190,10 +194,13 @@ class Command(BaseCommand):
         # outage or missing permission never aborts the prune run.
         bounce_deactivated = 0
         bounce_deleted = 0
+        suppressed_warning_emails: set[str] = set()
         if validate_bounces:
-            bounce_deactivated, bounce_deleted = self._prune_bounced_users(
-                feature_cutoff_date, dry_run, verbose
-            )
+            (
+                bounce_deactivated,
+                bounce_deleted,
+                suppressed_warning_emails,
+            ) = self._prune_bounced_users(feature_cutoff_date, dry_run, verbose)
 
         # --- 0b. Prune unconfirmed users whose signup email cannot receive mail ---
         # Runs before the warning phase so accounts with undeliverable
@@ -206,7 +213,9 @@ class Command(BaseCommand):
             )
 
         # --- 1. Send pre-removal warnings to users approaching the cutoff ---
-        warnings_sent = self._send_warnings(cutoff, grace_days, dry_run, verbose)
+        warnings_sent = self._send_warnings(
+            cutoff, grace_days, dry_run, verbose, suppressed_warning_emails
+        )
 
         # --- 2. Prune users past the grace period ---
         deactivated, deleted = self._prune_users(
@@ -235,10 +244,23 @@ class Command(BaseCommand):
 
         Reads delivery-failure notifications from the M365 sending mailbox
         (EMAIL_HOST_USER) via the Graph API — see email_bounces.py for the
-        fetch/classification details. Only hard bounces (explicit permanent
-        5xx, excluding 5.7.x policy rejections) prune, and only unconfirmed,
-        active, non-privileged accounts (no minimum age: the receiving server
-        itself rejected the mailbox, so the evidence is immediate).
+        fetch/classification details. Two prune paths:
+
+        * hard bounces (explicit permanent 5xx, excluding 5.7.x policy)
+        prune immediately — the receiving server itself rejected the
+        mailbox, so the evidence is immediate and no minimum age applies;
+        * 5.7.x policy rejections prune too, but volume-guarded: if a
+        single run sees more than EMAIL_BOUNCE_POLICY_PRUNE_MAX distinct
+        policy-rejected recipients, the run assumes OUR sending config is
+        broken (e.g. SPF/DKIM failure mass-bouncing genuine signups),
+        prunes nothing on policy evidence, and logs an alert. Isolated
+        recipient-side blocks (e.g. a parliamentary mail system rejecting
+        external mail) never resolve, so the account is pruned and further
+        warning emails to the address are suppressed.
+
+        Either way, warning emails are suppressed for policy-rejected
+        addresses (when the breaker is not tripped) — re-emailing an
+        address that already rejected us is pure noise.
 
         This phase NEVER aborts the prune run: a missing Mail.Read permission
         (401/403), a network outage, or any unexpected error is logged and
@@ -255,7 +277,7 @@ class Command(BaseCommand):
                     "  EMAIL_HOST_USER is not set — bounce processing skipped."
                 )
             )
-            return 0, 0
+            return 0, 0, set()
 
         lookback_hours = getattr(
             settings, "EMAIL_BOUNCE_LOOKBACK_HOURS", BOUNCE_LOOKBACK_HOURS
@@ -297,7 +319,7 @@ class Command(BaseCommand):
                         "Continuing without bounce processing."
                     )
                 )
-            return 0, 0
+            return 0, 0, set()
         except requests.RequestException as exc:
             # Network outage, DNS failure, timeout — never abort the run.
             logger.error(
@@ -312,7 +334,7 @@ class Command(BaseCommand):
                     "Continuing without bounce processing."
                 )
             )
-            return 0, 0
+            return 0, 0, set()
         except Exception:
             # Anything else must never abort the daily prune.
             logger.exception(
@@ -325,12 +347,13 @@ class Command(BaseCommand):
                     "Continuing without bounce processing."
                 )
             )
-            return 0, 0
+            return 0, 0, set()
 
         hard = [b for b in bounces if b.is_hard]
+        policy = [b for b in bounces if b.classification == POLICY]
         self.stdout.write(
             f"Found {len(bounces)} bounce(s) in the lookback window "
-            f"({len(hard)} hard)"
+            f"({len(hard)} hard, {len(policy)} policy)"
         )
 
         deactivated = 0
@@ -348,7 +371,11 @@ class Command(BaseCommand):
 
             if not bounce.is_hard:
                 if verbose:
-                    self.stdout.write("    Soft/unknown bounce — no action (fail open)")
+                    self.stdout.write(
+                        "    Soft/unknown/policy bounce — handled separately"
+                        if bounce.classification == POLICY
+                        else "    Soft/unknown bounce — no action (fail open)"
+                    )
                 continue
 
             if not bounce.recipient:
@@ -360,21 +387,8 @@ class Command(BaseCommand):
                 continue  # Multiple NDRs for the same address
             seen.add(bounce.recipient.lower())
 
-            # Only unconfirmed, active, non-privileged accounts are pruned
-            # on bounce evidence. Same exclusions as the grace-period phase.
-            candidates = (
-                User.objects.filter(
-                    email__iexact=bounce.recipient,
-                    profile__email_confirmed=False,
-                    is_active=True,
-                )
-                .exclude(is_superuser=True)
-                .exclude(is_staff=True)
-                .exclude(oidc__email_verified=True)
-                .select_related("profile")
-            )
-
-            if not candidates.exists():
+            candidates = list(self._bounce_prune_candidates(bounce.recipient))
+            if not candidates:
                 self._report_non_prunable_bounce(bounce)
                 continue
 
@@ -399,7 +413,90 @@ class Command(BaseCommand):
                 else:
                     deleted += 1
 
-        return deactivated, deleted
+        # --- 5.7.x policy rejections: prune below a volume threshold ---
+        # A handful of policy rejections = recipient-side blocks that will
+        # never resolve (e.g. a parliamentary MTA rejecting external mail):
+        # prune the unconfirmed accounts and stop emailing the address.
+        # A mass 5.7.x storm = OUR sending config is broken (SPF/DKIM
+        # failure mass-bouncing genuine signups): prune nothing, alert.
+        policy_recipients = {b.recipient.lower() for b in policy if b.recipient}
+        policy_prune_max = getattr(
+            settings, "EMAIL_BOUNCE_POLICY_PRUNE_MAX", POLICY_PRUNE_MAX
+        )
+        breaker_tripped = len(policy_recipients) > policy_prune_max
+        if breaker_tripped:
+            logger.error(
+                "Policy-rejection circuit breaker tripped: %d distinct "
+                "5.7.x recipients in one run exceeds EMAIL_BOUNCE_POLICY_PRUNE_MAX "
+                "(%d). This pattern means CheckTick's own sending config is "
+                "probably broken (SPF/DKIM/reputation) and mass-bouncing "
+                "genuine signups — no policy-based pruning this run.",
+                len(policy_recipients),
+                policy_prune_max,
+                extra={"policy_recipients": len(policy_recipients)},
+            )
+            self.stdout.write(
+                self.style.ERROR(
+                    f"  POLICY CIRCUIT BREAKER: {len(policy_recipients)} distinct "
+                    "5.7.x policy rejections in one run (> "
+                    f"{policy_prune_max}) — our sending config is probably "
+                    "broken. No policy-based pruning this run; investigate "
+                    "SPF/DKIM/sender reputation."
+                )
+            )
+        else:
+            for bounce in policy:
+                if not bounce.recipient:
+                    continue
+                if bounce.recipient.lower() in seen:
+                    continue
+                seen.add(bounce.recipient.lower())
+                for user in self._bounce_prune_candidates(bounce.recipient):
+                    action = prune_unconfirmed_user(
+                        user,
+                        feature_cutoff_date=feature_cutoff_date,
+                        reason="email_policy_rejected",
+                        detail=(
+                            "signup email rejected by recipient policy "
+                            f"(status {bounce.status_code})"
+                        ),
+                        metadata_extra={
+                            "bounce_subject": bounce.subject,
+                            "bounce_received_at": bounce.received_at,
+                            "bounce_status": bounce.status_code,
+                        },
+                        dry_run=dry_run,
+                        verbose=verbose,
+                        stdout=self.stdout,
+                        style=self.style,
+                    )
+                    if action == "deactivated":
+                        deactivated += 1
+                    else:
+                        deleted += 1
+
+        # Suppress warning emails to policy-rejected addresses (only when
+        # the breaker is NOT tripped — under a broken-sending-config storm
+        # the addresses may be perfectly real).
+        suppressed = set() if breaker_tripped else policy_recipients
+        return deactivated, deleted, suppressed
+
+    def _bounce_prune_candidates(self, recipient: str):
+        """Unconfirmed, active, non-privileged accounts for a bounced address.
+
+        Same exclusions as the grace-period phase.
+        """
+        return (
+            User.objects.filter(
+                email__iexact=recipient,
+                profile__email_confirmed=False,
+                is_active=True,
+            )
+            .exclude(is_superuser=True)
+            .exclude(is_staff=True)
+            .exclude(oidc__email_verified=True)
+            .select_related("profile")
+        )
 
     def _report_non_prunable_bounce(self, bounce):
         """Report a hard bounce that has no prunable target account."""
@@ -506,8 +603,17 @@ class Command(BaseCommand):
 
         return deactivated, deleted
 
-    def _send_warnings(self, cutoff, grace_days, dry_run, verbose) -> int:
-        """Send 1-week and 1-day warnings to unconfirmed users approaching removal."""
+    def _send_warnings(
+        self, cutoff, grace_days, dry_run, verbose, suppress_emails=None
+    ) -> int:
+        """Send 1-week and 1-day warnings to unconfirmed users approaching removal.
+
+        ``suppress_emails`` is a set of lower-cased addresses (from the
+        bounce phase) that already rejected our mail with a 5.7.x policy
+        rejection — warning them again is guaranteed to bounce, so they
+        are skipped and simply age out at the grace period.
+        """
+        suppress = {e.lower() for e in (suppress_emails or set())}
         # Users within the warning window: not yet past grace period, but
         # within 7 days of it. i.e. date_joined is between (cutoff + 1s) and
         # (cutoff + 7 days). We use date_joined__gte=cutoff so users exactly
@@ -541,6 +647,13 @@ class Command(BaseCommand):
 
         sent = 0
         for user in warning_candidates:
+            if user.email.lower() in suppress:
+                if verbose:
+                    self.stdout.write(
+                        f"  Skip warning {user.username}: address already "
+                        "rejected our mail (5.7.x policy) — suppressed"
+                    )
+                continue
             days_since_joined = (timezone.now() - user.date_joined).days
             days_until_removal = grace_days - days_since_joined
             current_stage = user.profile.unconfirmed_warning_stage or ""
